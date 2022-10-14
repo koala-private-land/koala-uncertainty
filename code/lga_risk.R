@@ -1,7 +1,9 @@
+library(tidyverse)
 library(stringr)
 library(patchwork)
-
+library(sf)
 ## Correlation between mean and variance
+source('code/load_paths.R')
 prop_suit_df <- read_csv('../../Koala/temporal_planning/prop_suit_clim.csv')
 clim_scen_list <- readRDS('../../Koala/temporal_planning/clim_scen_list.RData')
 
@@ -20,34 +22,64 @@ nsw_lga <- st_read( paste0(rdm_path, "\\planning_units\\planning_units.gdb"), la
 properties_centroid <- properties %>%
   st_centroid() %>%
   st_transform(4326)
-properties_intersect <- properties_centroid  %>%
+properties_intersect <- properties_centroid %>%
   st_join(nsw_lga)
 
-selected_index <- clim_scen_list[year == '2085' & rcp == 'RCP45'] %>% lapply(function(x) x$id) %>% unlist() %>% as.vector()
-prop_suit_subset <- prop_suit_df[selected_index]
+# Select best 10 percent of sites by area based on average predictions
+pct <- 0.1
+properties_intersect <- cbind(prop_suit_df, lga = properties_intersect[['lga']], ha = properties_intersect[['Shape_Area.x']] / 10000)
+properties_intersect$mean_suitability <- properties_intersect[selected_index] %>%
+  rowMeans()
+properties_intersect <- properties_intersect %>%
+  group_by(lga) %>%
+  arrange(-mean_suitability) %>%
+  mutate(cum_ha = cumsum(ha)/sum(ha))
+
+new_prop_id <- properties_intersect$NewPropID[!is.na(properties_intersect$lga) & properties_intersect$cum_ha < pct]
+properties_intersect <- properties_intersect[properties_intersect$NewPropID %in% new_prop_id,]
+prop_suit_df <- prop_suit_df[prop_suit_df$NewPropID %in% new_prop_id,]
+
+
+
+selected_index <- clim_scen_list[year == '2085'] %>% lapply(function(x) x$id) %>% unlist() %>% as.vector()
+prop_suit_subset <- prop_suit_df[prop_suit_df$NewPropID %in% new_prop_id,selected_index]
 
 # Weighted average of climate suitability
 prop_ha <- properties[['Shape_Area']]/10000 # Area in hectares
-lga_suit <- cbind(prop_suit_subset, lga = properties_intersect[['lga']], ha = prop_ha) %>%
+prop_ha <- prop_ha[properties[['NewPropID']] %in% new_prop_id]
+
+properties_intersect_lga <- properties_intersect %>%
   group_by(lga) %>%
   summarise_at(selected_index, funs(weighted.mean(., ha))) %>%
   arrange(lga) %>%
   dplyr::select('lga', selected_index)
+nsw_prop_ha <- cbind(prop_suit_subset, lga = properties_intersect[['lga']], ha = prop_ha) %>%
+  filter(!is.na(lga)) %>%
+  group_by(lga) %>%
+  summarise(ha = sum(ha))
+lga_suit <- properties_intersect_lga
+  
 mean_sd_corr_df <- data.frame(lga = lga_suit[['lga']],
                               mean = rowMeans(lga_suit[selected_index]), 
-                              sd = apply(lga_suit[selected_index], MARGIN=1, sd))
+                              sd = apply(lga_suit[selected_index], MARGIN=1, sd)) %>%
+  left_join(nsw_prop_ha, by ='lga')
 mean_sd_corr_lga <- nsw_lga %>%
   left_join(mean_sd_corr_df, by = 'lga') %>%
-  mutate(ha = Shape_Area / 10000) %>%
-  st_simplify(dTolerance = 2000)
+  st_simplify(dTolerance = 2000) %>%
+  filter(!is.na(mean))
 
-mean_sd_corr_lga %>%
+cutoff <- 8
+mean_sd_corr_plot <- mean_sd_corr_lga %>%
   ggplot(aes(x = mean, y = sd)) +
   geom_point(aes(size = ha)) +
-  ggrepel::geom_label_repel(aes(label = ifelse(mean/sd > 12, word(str_to_title(lga), 1), NA))) +
+  ggrepel::geom_label_repel(aes(label = ifelse(mean/sd > cutoff, word(str_to_title(lga),1), NA))) +
   theme_bw()+
   scale_x_continuous('Habitat Suitability (Mean)') +
   scale_y_continuous('Habitat Suitability (SD)')
+mean_sd_corr_plot
+
+ggsave(mean_sd_corr_plot, filename = 'plots/mean_sd_corr_plot.png')
+
 
 mean_sd_corr_lga[c('X', 'Y')] <- mean_sd_corr_lga %>% st_centroid() %>% st_coordinates()
 
@@ -66,23 +98,48 @@ sd_plot <- mean_sd_corr_lga %>%
 sr_plot <- mean_sd_corr_lga %>%
   ggplot() +
   geom_sf(aes(fill = mean/sd)) +
-  ggrepel::geom_label_repel(aes(x = X, y = Y, color = 'white', label = ifelse(mean/sd > 12, word(str_to_title(lga), 1), NA)),nudge_x=-30) +
-  scale_fill_viridis_c('Mean/SD', direction = -1, option = 'mako') +
+  ggrepel::geom_label_repel(aes(x = X, y = Y, label = ifelse(mean/sd > cutoff, word(str_to_title(lga), 1), NA)),nudge_x=-30) +
+  scale_fill_viridis_c('Mean/SD', option = 'mako') +
   theme_void()
 ggsave(mean_plot | sd_plot | sr_plot, filename = 'plots/lga_clim_risk.png', scale = 1.2)
 
+## Mean Variance optimisation -------
+lga_suit_ha <- lga_suit
+for (s in selected_index) {
+  lga_suit_ha[,s] <- lga_suit[,s] *mean_sd_corr_lga$ha / 100
+}
 
-mean_suit <- rowMeans(prop_suit_subset)
-sd_suit <- apply(prop_suit_subset, MARGIN = 1, sd)
-mean_sd_corr_df <- cbind(mean = mean_suit, sd = sd_suit, prop_size = prop_size,
-                         nsw_lga = properties_intersect[['NSW_LGA__2']]) %>%
-  as.data.frame()
-mean_sd_corr_lga <- mean_sd_corr_df %>%
-  summarise()
-  
-mean_sd_corr_df %>%
-  filter(prop_size > 174961) %>%
-  ggplot(aes(x = mean, y = sd)) +
+lga_cov <- lga_suit_ha[selected_index] %>% t() %>% as.matrix() %>% cov()
+target <- 0.1
+obj <- -mean_sd_corr_lga$mean * mean_sd_corr_lga$ha
+covmat <- as.matrix(lga_cov)
+#A <- matrix(mean_sd_corr_lga$ha, nrow = 1, byrow = T)
+#b <- c(sum(mean_sd_corr_lga$ha)*target)
+A <- matrix(c(mean_sd_corr_lga$ha, -mean_sd_corr_lga$ha), nrow = 2, byrow = T)
+b <- c(sum(mean_sd_corr_lga$ha)*target,-sum(mean_sd_corr_lga$ha)*target)
+lambda_vec <- seq(0,1,0.1)
+ev_results <- fcn_lp_opt(obj, A, b)
+mv_results <- lapply(lambda_vec, function(l) fcn_mv_opt(obj, A, b, covmat, l))
+names(mv_results) <- paste0('l', lambda_vec)
+mv_decision <- lapply(mv_results, function(x) x$x) %>%
+  bind_rows(.id = 'lambda')
+
+mv_plot <- mean_sd_corr_lga %>%
+  cbind(mv_decision) %>%
+  pivot_longer(paste0('l', lambda_vec), names_to = 'lambda', values_to = 'decision') %>%
+  mutate(lambda = factor(lambda, levels = paste0('l', lambda_vec), labels = paste0('λ = ', lambda_vec))) %>%
+  ggplot(aes(fill = decision)) +
+  geom_sf() +
+  facet_wrap(~lambda,nrow = 2) +
+  theme_void()
+ggsave(mv_plot, filename = 'plots/lga_mv.png', scale = 1.5, units = 'mm', height = 120, width = 150)
+
+benefit_dist <- t(as.matrix(lga_suit_ha[selected_index])) %*% as.matrix(mv_decision)
+efficiency_frontier <- data.frame(mean = colMeans(benefit_dist), sd = apply(benefit_dist, 2, sd))
+efficiency_frontier_plot <- ggplot(efficiency_frontier, aes(x = sd, y = mean)) +
   geom_point() +
+  geom_smooth(se = F, color = '#4DBBD5FF') +
+  scale_y_continuous('Expected benefits') +
+  scale_x_continuous('Standard Deviation') +
   theme_bw()
-
+ggsave(efficiency_frontier_plot, filename = 'plots/efficiency_frontier_plot.png')

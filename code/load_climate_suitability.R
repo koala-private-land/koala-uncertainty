@@ -12,9 +12,7 @@ library(future.apply)
 # Modify "outpath" to choose where to save the output file
 outpath <- "C:/Users/uqfcho/Documents/Koala/temporal_planning/"
 
-rdm_path <- "\\\\uq.edu.au\\UQ-Research\\KPRIVATE19-A2212\\data"
-suitability_path <- "\\Graham_et_al_2019_koalas\\Phascolarctos_cinereus\\species_data_Phascolarctos_cinereus\\suitability\\"
-properties_path <- "\\spatial_bid_model_predictions\\spatial_predictions_v1_0.gdb"
+source('code/load_paths.R')
 
 gcm <- c('cccma-cgcm31', 'ccsr-miroc32hi', 'ccsr-miroc32med', 'cnrm-cm3', 'csiro-mk30', 'gfdl-cm20', 
          'gfdl-cm21', 'giss-modeleh', 'giss-modeler', 'iap-fgoals10g', 'inm-cm30', 'ipsl-cm4',
