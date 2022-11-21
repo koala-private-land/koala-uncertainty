@@ -4,6 +4,7 @@ library(patchwork)
 library(sf)
 ## Correlation between mean and variance
 source('code/load_paths.R')
+source('code/fcn_mv_opt.R')
 prop_suit_df <- read_csv('../../Koala/temporal_planning/prop_suit_clim.csv')
 clim_scen_list <- readRDS('../../Koala/temporal_planning/clim_scen_list.RData')
 
@@ -25,6 +26,7 @@ properties_centroid <- properties %>%
 properties_intersect <- properties_centroid %>%
   st_join(nsw_lga)
 
+selected_index <- clim_scen_list[year == '2085'] %>% lapply(function(x) x$id) %>% unlist() %>% as.vector()
 # Select best 10 percent of sites by area based on average predictions
 pct <- 0.1
 properties_intersect <- cbind(prop_suit_df, lga = properties_intersect[['lga']], ha = properties_intersect[['Shape_Area.x']] / 10000)
@@ -41,7 +43,6 @@ prop_suit_df <- prop_suit_df[prop_suit_df$NewPropID %in% new_prop_id,]
 
 
 
-selected_index <- clim_scen_list[year == '2085'] %>% lapply(function(x) x$id) %>% unlist() %>% as.vector()
 prop_suit_subset <- prop_suit_df[prop_suit_df$NewPropID %in% new_prop_id,selected_index]
 
 # Weighted average of climate suitability
@@ -142,4 +143,4 @@ efficiency_frontier_plot <- ggplot(efficiency_frontier, aes(x = sd, y = mean)) +
   scale_y_continuous('Expected benefits') +
   scale_x_continuous('Standard Deviation') +
   theme_bw()
-ggsave(efficiency_frontier_plot, filename = 'plots/efficiency_frontier_plot.png')
+ggsave(efficiency_frontier_plot, filename = 'plots/efficiency_frontier_plot.png', scale = 1, units = 'mm', height = 100, width = 120)

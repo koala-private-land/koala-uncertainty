@@ -8,6 +8,7 @@ library(R.utils)
 library(sf)
 library(future)
 library(future.apply)
+library(arcgisbinding)
 
 # Modify "outpath" to choose where to save the output file
 outpath <- "C:/Users/uqfcho/Documents/Koala/temporal_planning/"
@@ -39,13 +40,18 @@ clim_scen_list <- split(clim_scen, seq(nrow(clim_scen))) %>%
 names(clim_scen_list) <- lapply(clim_scen_list, function(x) x$id)
 
 # Simple extraction based on point estimates
-properties <- st_read(paste0(rdm_path, properties_path), layer = "spatial_pred_inperp_v1_0")
-properties_centroid <- properties %>%
+properties_source <- st_read(paste0(rdm_path, properties_path), layer = "spatial_pred_inperp_v1_0")
+khab_thres <- raster(paste0(rdm_path, khab_path))
+
+properties <- properties_source %>%
+  st_transform(4326)
+properties_centroid <- properties_source %>%
   st_centroid() %>%
   st_transform(4326) %>%
   st_coordinates()
 
-fcn_prop_suitability <- function(clim_scen_path, gz = T) {
+
+fcn_prop_suitability <- function(clim_scen_path, gz = T, polygon = T) {
   if (gz) {
     spdf <- gunzip(filename = clim_scen_path, remove = F)
   } else {
@@ -53,7 +59,12 @@ fcn_prop_suitability <- function(clim_scen_path, gz = T) {
   }
   suit_raster <- spdf %>% 
     raster()
-  prop_suit <- raster::extract(suit_raster, properties_centroid)
+  if (polygon) {
+    prop_suit <- raster::extract(suit_raster, properties)
+  } else {
+    prop_suit <- raster::extract(suit_raster, properties_centroid)
+  }
+  prop_suit
 }
 
 # Check if file exists
