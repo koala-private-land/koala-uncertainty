@@ -57,7 +57,7 @@ fcn_EVPXI <- function(gamma, action_state, p, Y) {
   U_inv <- function(c) CARA_inv(c, gamma)
   utility_table <- U(action_state)
   n_y <- max(unique(Y))
-  max_ay <- lapply(1:n_y, function(y) which.max(utility_table[,Y == y] %*% p[Y == y]/sum(p[Y == y]))) %>% unlist() # Actions that maximise utility in each experimental outcome
+  max_ay <- lapply(1:n_y, function(y) which.max(utility_table[,Y == y]%*%(p[Y == y]/sum(p[Y == y])))) %>% unlist() # Actions that maximise utility in each experimental outcome
   max_EU <- which.max(utility_table %*% p) # Action that maximises expected utility (index) across all states
   max_a <- max_ay[Y]
   VPI_value <- action_state[cbind(max_a, seq_along(max_a))] %*% p - action_state[max_EU,] %*% p
@@ -65,8 +65,11 @@ fcn_EVPXI <- function(gamma, action_state, p, Y) {
   list(VPI = VPI, VPI_value = VPI_value, max_EU = max_EU)
 }
 
-fcn_VOI_simulation  <- function(voi_problem, gamma_seq, evpxi = T) {
-  if (evpxi) {
+fcn_VOI_simulation  <- function(voi_problem, gamma_seq) {
+  if(is.null(voi_problem$evpxi)) {
+    voi_problem$evpxi <- FALSE
+  }
+  if (!voi_problem$evpxi) {
     voi_result  <- lapply(gamma_seq, fcn_EVPI, action_state = voi_problem$action_state, p = voi_problem$p) 
   } else {
     voi_result  <- lapply(gamma_seq, fcn_EVPXI, action_state = voi_problem$action_state, 
