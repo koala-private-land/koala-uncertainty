@@ -2,6 +2,8 @@ library(tidyverse)
 library(stringr)
 library(patchwork)
 library(sf)
+library(mapview)
+
 ## Correlation between mean and variance
 source('code/load_paths.R')
 source('code/fcn_mv_opt.R')
@@ -17,6 +19,10 @@ rdm_path <- "\\\\uq.edu.au\\UQ-Research\\KPRIVATE19-A2212\\data"
 suitability_path <- "\\Graham_et_al_2019_koalas\\Phascolarctos_cinereus\\species_data_Phascolarctos_cinereus\\suitability\\"
 properties_path <- "\\spatial_bid_model_predictions\\spatial_predictions_v1_0.gdb"
 properties <- st_read(paste0(rdm_path, properties_path), layer = "spatial_pred_10yr_v1_0")
+properties <- properties %>%
+  mutate(area_meters = st_area(properties),
+         area_hectares = units::set_units(area_meters, "hectares"),
+         area_km = units::set_units(area_meters, "km^2"))
 nsw_lga <- st_read( paste0(rdm_path, "\\planning_units\\planning_units.gdb"), layer = 'nsw_lga_pu_all') %>%
   st_transform(4326) %>%
   rename(lga = NSW_LGA__2)
@@ -27,43 +33,42 @@ properties_intersect <- properties_centroid %>%
   st_join(nsw_lga)
 
 selected_index <- clim_scen_list %>% lapply(function(x) x$id) %>% unlist() %>% as.vector()
-# Select best 30 percent of sites by area based on average predictions
-pct <- 0.3
-properties_intersect <- cbind(prop_suit_df, 
-                              lga = properties_intersect[['lga']], 
-                              ha = properties_intersect[['Shape_Area.x']] / 10000)
-properties_intersect$mean_suitability <- properties_intersect[selected_index] %>%
-  rowMeans()
-properties_intersect <- properties_intersect %>%
+# Select best 10 percent of sites by area based on average predictions
+pct <- 0.1
+properties_suit <- left_join(properties_intersect, prop_suit_df, by = 'NewPropID')
+properties_suit <- properties_suit %>%
+  mutate(mean_suitability = st_drop_geometry(properties_suit[selected_index]) %>% rowMeans())
+properties_suit <- properties_suit %>%
+  filter(MeanAdopt > 0.5) %>%
   group_by(lga) %>%
   arrange(-mean_suitability) %>%
-  mutate(cum_ha = cumsum(ha)/sum(ha))
+  mutate(area_km = units::drop_units(area_km),
+         cum_area_km = cumsum(area_km)/sum(area_km))
 
-new_prop_id <- properties_intersect$NewPropID[!is.na(properties_intersect$lga) & properties_intersect$cum_ha < pct]
-properties_intersect <- properties_intersect[properties_intersect$NewPropID %in% new_prop_id,]
-prop_suit_df <- prop_suit_df[prop_suit_df$NewPropID %in% new_prop_id,] %>%
+new_prop_id <- properties_suit$NewPropID[!is.na(properties_suit$lga) & properties_suit$cum_area_km < pct]
+properties_subset <- properties_suit[properties_suit$NewPropID %in% new_prop_id,] %>%
   arrange(NewPropID)
-prop_suit_subset <- prop_suit_df[prop_suit_df$NewPropID %in% new_prop_id,selected_index]
+
+# ggplot() +
+#   geom_sf(data = nsw_lga) +
+#   geom_sf(data = properties_subset, aes(color = mean_suitability)) +
+#   theme_void()
 
 # Weighted average of climate suitability
-prop_ha <- properties[['Shape_Area']]/10000 # Area in hectares, to be replaced with koala habitat
-prop_ha <- prop_ha[properties[['NewPropID']] %in% new_prop_id]
 
-# 10-year costs
+# 10-year costs (expressed in real units)
 discount_factor <- 0.02
 discount_vector <- (1+discount_factor)^(seq(2025, 2085, 10) - 2020)
-prop_costs <- properties[properties$NewPropID %in% new_prop_id,] %>%
-  arrange(NewPropID)
-cost <- t(t(matrix(rep(prop_costs$MeanWTA, 7), ncol = 7)) * discount_vector) %>%
+cost <- t(t(matrix(rep(properties_subset$MeanWTA * 1000 * (properties_subset$MeanProp * properties_subset$area_hectares), 7), ncol = 7)) * discount_vector) %>%
   as.data.frame()
 colnames(cost) <- paste0("cost", as.character(seq(2025, 2085, 10)))
-cost_df <- cbind(data.frame(NewPropID = prop_costs$NewPropID), cost)
+cost_df <- cbind(data.frame(NewPropID = properties_subset$NewPropID), cost)
 
 # Suitability-weighted habitat
-habitat_suitability_weighed <- prop_suit_df[selected_index] * prop_ha
+habitat_suitability_weighed <- properties_subset[selected_index] * properties_subset$area_km
 ind <- 0
 habitat_cc <- list()
-new_prop_id_df <- data.frame(NewPropID = prop_costs$NewPropID)
+new_prop_id_df <- data.frame(NewPropID = properties_subset$NewPropID)
 for (g in unique(gcm)) {
   for (r in unique(rcp)) {
     ind <- ind+1
