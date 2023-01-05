@@ -8,10 +8,12 @@ library(R.utils)
 library(sf)
 library(future)
 library(future.apply)
+library(exactextractr)
+library(spatialEco)
 
 # Modify "outpath" to choose where to save the output file
 outpath <- "C:/Users/uqfcho/Documents/Koala/temporal_planning/"
-outpath <- '/Users/frankiecho/Documents/Github/koala-uncertainty/data/'
+#outpath <- '/Users/frankiecho/Documents/Github/koala-uncertainty/data/'
 
 source('code/load_paths.R')
 
@@ -42,6 +44,7 @@ names(clim_scen_list) <- lapply(clim_scen_list, function(x) x$id)
 # Simple extraction based on point estimates
 properties_source <- st_read(paste0(rdm_path, properties_path), layer = "spatial_pred_inperp_v1_0")
 khab_thres <- raster(paste0(rdm_path, khab_path))
+properties_khab <- exactextractr::exact_extract(khab_thres, properties_source, fun='sum')
 
 properties <- properties_source %>%
   st_transform(4326)
@@ -49,7 +52,6 @@ properties_centroid <- properties_source %>%
   st_centroid() %>%
   st_transform(4326) %>%
   st_coordinates()
-
 
 fcn_prop_suitability <- function(clim_scen_path, gz = T, polygon = T) {
   if (gz) {

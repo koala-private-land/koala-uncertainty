@@ -1,9 +1,11 @@
-using Random, Distributions, Plots, Revise;
+using Distributions
+using Random
+using Revise;
 includet("optim-functions.jl")
 
 Random.seed!(1234);
-N = 1000; # planning units
-S = 18; # uncertain scenarios
+N = 17276; # planning units
+S = 36; # uncertain scenarios
 years = [2025,2035,2045,2055,2065,2075,2085];
 T = length(years); # timesteps
 δ = (1+0.02) .^ (years .- 2022);
@@ -42,6 +44,6 @@ p = p./sum(p);
 
 β = 0.5;
 γ = 0.5;
-K = 50;
+K = 50.0;
 
-solution = fcn_two_stage_opt(C, M, p, 3);
+solution = fcn_two_stage_opt(C, M, K, p, 3);
