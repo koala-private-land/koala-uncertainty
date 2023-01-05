@@ -3,7 +3,7 @@ library(LaplacesDemon)
 library(mvtnorm)
 library(reshape2)
 
-source("~/GitHub/uncertainty/code/voi_simulations.R")
+source("~/Documents/GitHub/koala-uncertainty/code/voi_simulations.R")
 
 fcn_plot_corr_mat <- function(sigma_list, limits = c(NA, NA)) {
   names(sigma_list) <- 1:length(sigma_list)
@@ -32,7 +32,7 @@ action_state <- matrix(c(a1, a2), byrow = T, ncol = length(a1))
 colnames(action_state) <- paste0('s', 1:n_states)
 rownames(action_state) <- paste0('a', 1:n_actions)
 e1$action_state <- action_state
-fcn_VOI_simulation(e1, gamma_seq, evpxi = F) %>%
+fcn_VOI_simulation(e1, gamma_seq) %>%
   ggplot(aes(x = gamma, y = VPI, color = factor(max_EU))) +
   geom_line() +
   theme_minimal()

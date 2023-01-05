@@ -8,10 +8,10 @@ library(R.utils)
 library(sf)
 library(future)
 library(future.apply)
-library(arcgisbinding)
 
 # Modify "outpath" to choose where to save the output file
 outpath <- "C:/Users/uqfcho/Documents/Koala/temporal_planning/"
+outpath <- '/Users/frankiecho/Documents/Github/koala-uncertainty/data/'
 
 source('code/load_paths.R')
 
