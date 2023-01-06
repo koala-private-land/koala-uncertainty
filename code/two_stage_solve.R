@@ -49,10 +49,7 @@ new_prop_id <- properties_suit$NewPropID[!is.na(properties_suit$lga) & propertie
 properties_subset <- properties_suit[properties_suit$NewPropID %in% new_prop_id,] %>%
   arrange(NewPropID)
 
-# ggplot() +
-#   geom_sf(data = nsw_lga) +
-#   geom_sf(data = properties_subset, aes(color = mean_suitability)) +
-#   theme_void()
+
 
 # Weighted average of climate suitability
 
@@ -81,12 +78,12 @@ for (g in unique(gcm)) {
 habitat_cc_merged <- bind_rows(habitat_cc, .id = 'climate_model')
 
 ## Export data to Julia to be solved by JuMP
+saveRDS(properties_subset, file="data/properties_subset.RData")
 write_csv(cost_df, "data/meanWTA_10yr.csv")
 write_csv(habitat_cc_merged, "data/habitat_suitw_graham.csv")
 
 # results <- fcn_two_stage_opt(cost = cost, quality = habitat_cc, area = prop_ha, t_prime = 4, target = rep(7000, 7),
 #                              beta = 0, gamma = 0, type = 'recourse')
-
 
 
 

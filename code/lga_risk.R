@@ -40,9 +40,6 @@ properties_intersect <- properties_intersect %>%
 new_prop_id <- properties_intersect$NewPropID[!is.na(properties_intersect$lga) & properties_intersect$cum_ha < pct]
 properties_intersect <- properties_intersect[properties_intersect$NewPropID %in% new_prop_id,]
 prop_suit_df <- prop_suit_df[prop_suit_df$NewPropID %in% new_prop_id,]
-
-
-
 prop_suit_subset <- prop_suit_df[prop_suit_df$NewPropID %in% new_prop_id,selected_index]
 
 # Weighted average of climate suitability

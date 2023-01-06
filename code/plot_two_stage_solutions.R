@@ -27,8 +27,9 @@ obj_values_plot <- obj_values %>%
                            c("No recourse", "Add only", "Terminate only", "Full recourse"))) %>%
   ggplot(aes(x = `Objective Value`, y = fct_rev(Solution))) +
   geom_bar(stat="identity", width = 0.5) +
+  geom_text(aes(label = paste(round(`Objective Value`/1e6,1),"M")), nudge_x = -3e6, color = 'white') +
   scale_y_discrete('') +
-  scale_x_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  scale_x_continuous("Total conservation costs (AUD)", labels = scales::unit_format(unit = "M", scale = 1e-6)) +
   ggpubr::theme_pubclean()
 obj_values_plot
 
@@ -47,7 +48,7 @@ second_stage <- ggplot(properties_solution_long) +
   geom_sf(data = nsw_lga, fill = 'white') +
   geom_sf(data = properties_solution_long %>% filter(decision < 1), color = 'gray60', size = 0.1) +
   geom_sf(data = properties_solution_long %>% filter(decision >= 1), aes(color = decision)) +
-  scale_color_viridis_b() +
+  scale_color_viridis_b("") +
   facet_grid(rows = vars(variable), cols = vars(recourse)) +
   theme_void()
 
