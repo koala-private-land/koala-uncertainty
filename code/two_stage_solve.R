@@ -49,10 +49,15 @@ new_prop_id <- properties_suit$NewPropID[!is.na(properties_suit$lga) & propertie
 properties_subset <- properties_suit[properties_suit$NewPropID %in% new_prop_id,] %>%
   arrange(NewPropID)
 
-
+# Extract koala habitat quantity 
+khab_thres <- read_csv('data/khab_prop.csv') %>%
+  rename(NewPropID = NEWPROPID) %>%
+  mutate(khab_prop = SUM/COUNT)
+properties_subset <- properties_subset %>%
+  left_join(khab_thres, by = 'NewPropID') %>%
+  mutate(khab_area_km = khab_prop * area_km)
 
 # Weighted average of climate suitability
-
 # 10-year costs (expressed in real units)
 discount_factor <- 0.02
 discount_vector <- (1+discount_factor)^(seq(2025, 2085, 10) - 2020)
@@ -62,7 +67,7 @@ colnames(cost) <- paste0("cost", as.character(seq(2025, 2085, 10)))
 cost_df <- cbind(data.frame(NewPropID = properties_subset$NewPropID), cost)
 
 # Suitability-weighted habitat
-habitat_suitability_weighed <- properties_subset[selected_index] * properties_subset$area_km
+habitat_suitability_weighed <- properties_subset[selected_index] * properties_subset$khab_area_km
 ind <- 0
 habitat_cc <- list()
 new_prop_id_df <- data.frame(NewPropID = properties_subset$NewPropID)

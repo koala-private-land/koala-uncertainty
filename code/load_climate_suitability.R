@@ -44,7 +44,14 @@ names(clim_scen_list) <- lapply(clim_scen_list, function(x) x$id)
 # Simple extraction based on point estimates
 properties_source <- st_read(paste0(rdm_path, properties_path), layer = "spatial_pred_inperp_v1_0")
 khab_thres <- raster(paste0(rdm_path, khab_path))
-properties_khab <- exactextractr::exact_extract(khab_thres, properties_source, fun='sum')
+crs(khab_thres) <- CRS('+init=EPSG:4283')
+#khab_thres_proj <- projectRaster(khab_thres, crs=CRS('+init=EPSG:4283'))
+properties_khab <- exactextractr::exact_extract(khab_thres, properties_source[1:1000,], fun='sum')
+
+ggplot() +
+  geom_raster(data = khab_thres %>% as.data.frame(xy = T), aes(x = x, y = y)) +
+  geom_sf(data = properties_source[1:10,]) +
+  theme_minimal()
 
 properties <- properties_source %>%
   st_transform(4326)
