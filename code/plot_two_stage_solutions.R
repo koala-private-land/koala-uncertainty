@@ -25,11 +25,11 @@ obj_values <- read_csv("data/obj_values.csv")
 obj_values_plot <- obj_values %>%
   mutate(Solution = factor(Solution, c("no_recourse", "add_only", "terminate_only", "full_recourse"),
                            c("No recourse", "Add only", "Terminate only", "Full recourse"))) %>%
-  ggplot(aes(x = `Objective Value`, y = fct_rev(Solution))) +
+  ggplot(aes(y = `Objective Value`, x = fct_rev(Solution))) +
   geom_bar(stat="identity", width = 0.5) +
-  geom_text(aes(label = paste(round(`Objective Value`/1e6,1),"M")), nudge_x = -3e6, color = 'white') +
-  scale_y_discrete('') +
-  scale_x_continuous("Total conservation costs (AUD)", labels = scales::unit_format(unit = "M", scale = 1e-6)) +
+  geom_text(aes(label = paste(round(`Objective Value`/1e6,1),"M")), nudge_y = -3e6, color = 'white') +
+  scale_x_discrete('') +
+  scale_y_continuous("Total conservation costs (AUD)", labels = scales::unit_format(unit = "M", scale = 1e-6)) +
   ggpubr::theme_pubclean()
 obj_values_plot
 

@@ -12,7 +12,7 @@ library(exactextractr)
 library(spatialEco)
 
 # Modify "outpath" to choose where to save the output file
-outpath <- "C:/Users/uqfcho/Documents/Github/uncertainty/"
+outpath <- "C:/Users/uqfcho/Documents/Github/koala-uncertainty/"
 #outpath <- '/Users/frankiecho/Documents/Github/koala-uncertainty/data/'
 
 source('code/load_paths.R')
