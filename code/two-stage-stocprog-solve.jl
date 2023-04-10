@@ -5,7 +5,7 @@ using StatsBase
 using StochasticPrograms
 using Gurobi
 using JuMP
-cd("/Users/frankiecho/Library/CloudStorage/OneDrive-TheUniversityofQueensland/Documents/GitHub/koala-uncertainty/")
+cd(raw"C:\Users\uqfcho\OneDrive - The University of Queensland\Documents\GitHub\koala-uncertainty")
 
 cost_df = CSV.read("data/meanWTA_10yr.csv", DataFrame);
 habitat_df = CSV.read("data/habitat_suitw_graham.csv", DataFrame);
@@ -34,11 +34,11 @@ two_stage_model = @stochastic_model begin
       end
       @decision(model, 0 <= x[i in 1:N] <= 1)
       @objective(model, Min, sum(cost[i,t]*x[i] for i in 1:N, t in 1:T))
-      for t=1:(tt-1)
+      #for t=1:(tt-1)
         for s=1:S
-          @constraint(model, sum(M[i,t,s] * x[i] for i in 1:N) >= K)
+          @constraint(model, sum(M[i,1,s] * x[i] for i in 1:N) >= K)
         end
-      end
+      #end
     end
     @stage 2 begin
       @parameters begin
@@ -51,9 +51,9 @@ two_stage_model = @stochastic_model begin
       @recourse(model, 0 <= y[i in 1:N] <= 1)
       @recourse(model, 0 <= w[i in 1:N] <= 1)
       @objective(model, Min, sum((β + cost[i,t]) * y[i] + (γ - cost[i,t]) * w[i] for i in 1:N, t in tt:T))
-      #for t=tt:T
-      @constraint(model, sum(m[i] * (x[i] + y[i] - w[i]) for i in 1:N) >= K)
-      #end
+      for t=tt:T
+        @constraint(model, sum(m[i] * (x[i] + y[i] - w[i]) for i in 1:N) >= K)
+      end
       for i=1:N
         @constraint(model, x[i] + y[i] <= 1)
         @constraint(model, w[i] <= x[i])
@@ -61,8 +61,8 @@ two_stage_model = @stochastic_model begin
     end
 end
 
-sp = instantiate(two_stage_model, ξ, optimizer = Gurobi.Optimizer)
+sp = instantiate(two_stage_model, ξ, optimizer = LShaped.Optimizer)
+set_optimizer_attribute(sp, MasterOptimizer(), Gurobi.Optimizer)
+set_optimizer_attribute(sp, SubProblemOptimizer(), Gurobi.Optimizer)
 
-set_time_limit_sec(sp, 10.0)
-unset_silent(sp)
 optimize!(sp)

@@ -32,4 +32,10 @@ dbf_wide <- dbf_bind %>%
 # Koala habitat sizes in each property
 khab_thres <- read_csv('data/khab_prop.csv') %>%
   rename(NewPropID = NEWPROPID) %>%
-  mutate(khab_prop = SUM/COUNT)
+  mutate(khab_prop = SUM/COUNT) %>%
+  mutate(khab_area = (khab_prop * AREA)) %>%
+  right_join(dbf_wide, by = 'NewPropID') %>%
+  select(NewPropID, khab_area, climate_model, t0, t1, t2, t3, t4, t5, t6, t7) %>%
+  filter(!is.na(khab_area))
+
+write_csv(khab_thres, file = 'data/kitl_prop_climate.csv')
