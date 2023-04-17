@@ -1,6 +1,6 @@
 # Solve a two-stage stochastic optimisation problem with JuMP where uncertainty is fully revealed in time τ
 # Objective: minimise cost subject to a metric reaching a threshold across all time periods
-using JuMP, Gurobi
+using JuMP, Gurobi, StochasticPrograms
 
 Base.@kwdef mutable struct Realisation
     # C₁: first stage costs, each element of the vector is for each property unit (size: N, N: number of units)
@@ -79,7 +79,74 @@ function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, �
     N, S = get_properties(realisations[1]) # N: number of units, S: number of climate scenarios
     J = length(realisations) # J: number of realisations of adoption behaviour
     model = Model(Gurobi.Optimizer)
-    set_silent(model)
+    #set_silent(model)
+    @variable(model, 0 <= x[1:N] <= 1) # First stage decision
+    @variable(model, 0 <= y[1:N, 1:S] <= (add_recourse ? 1 : 0)) # Second stage decision: adding units
+    @variable(model, 0 <= w[1:N, 1:S] <= (terminate_recourse ? 1 : 0)) # Second stage decision: terminating units
+    @variable(model, z) # Worst-case costs across all cost realisations
+    @objective(model, Min, z)
+
+    for j = 1:J
+        C₁ = realisations[j].C₁ #.* realisations[j].A # First-stage cost under the J-th realisation
+        C₂ = realisations[j].C₂ #.* realisations[j].A # Second-stage cost under the J-th realisation
+        M₁ = realisations[j].M₁ #.* realisations[j].A
+        M₂ = realisations[j].M₂ #.* realisations[j].A
+        p = realisations[j].p  # Climate scenario probabilities
+
+        # Objective is to minimise the worst-case (highest) costs, z
+        @constraint(model, z >= sum((C₁ .+ C₂)' * x) + sum(p[s] * sum((β + C₂[i]) * y[i, s] + (γ - C₂[i]) * w[i, s] for i in 1:N) for s in 1:S))
+
+        # Objective must be reached across all climate realisations before climate is known
+
+        for t in axes(M₁, 2)
+            for s in 1:S
+                @constraint(model, M₁[:, t, s]' * x >= K)
+            end
+        end
+
+        for t in axes(M₂, 2)
+            for s = 1:S
+                # After uncertainty is revealed, the objective only needs to be met at that realised climate realisation
+                @constraint(model, M₂[:, t, s]' * (x + y[:, s] - w[:, s]) >= K)
+            end
+        end
+
+    end
+
+    for i = 1:N
+        for s = 1:S
+            @constraint(model, x[i] + y[i, s] <= 1)
+        end
+    end
+
+    for i = 1:N
+        for s = 1:S
+            @constraint(model, x[i] - w[i, s] >= 0)
+        end
+    end
+
+    optimize!(model)
+
+    return (
+        model=model,
+        obj_value=objective_value(model),
+        x=value.(x),
+        y=value.(y),
+        w=value.(w)
+    )
+end
+
+function fcn_two_stage_opt_saa(realisations=AbstractSampler; K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true)
+    # Solve the deterministic equivalent of the two-stage problem with sample average approximation
+
+    # Arguments
+    # realisations: a vector of Realisations
+    # K: management objective
+
+    N, S = get_properties(realisations[1]) # N: number of units, S: number of climate scenarios
+    J = length(realisations) # J: number of realisations of adoption behaviour
+    model = Model(Gurobi.Optimizer)
+    #set_silent(model)
     @variable(model, 0 <= x[1:N] <= 1) # First stage decision
     @variable(model, 0 <= y[1:N, 1:S] <= (add_recourse ? 1 : 0)) # Second stage decision: adding units
     @variable(model, 0 <= w[1:N, 1:S] <= (terminate_recourse ? 1 : 0)) # Second stage decision: terminating units
@@ -153,11 +220,10 @@ function fcn_evaluate_solution(model::Model, realisations::Vector{Realisation})
 
     for j = 1:J
         r = realisations[j]
-        cost = [r.C₁' * x + r.C₂' * (x + y[:, s] - w[:, s]) for s = 1:S]
+        cost = [(r.C₁'*x+r.C₂'*(x+y[:, s]-w[:, s]))[1] for s = 1:S]
         metric_1 = mapreduce(permutedims, vcat, [r.M₁[:, :, s]' * x for s = 1:S])'
         metric_2 = mapreduce(permutedims, vcat, [r.M₂[:, :, s]' * (x + y[:, s] - w[:, s]) for s = 1:S])'
         metric = vcat(metric_1, metric_2)
-
         cost_mat[:, j] = cost
         metric_mat[:, :, j] = metric'
     end
