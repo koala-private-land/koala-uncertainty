@@ -29,6 +29,13 @@ dbf_wide <- dbf_bind %>%
   select(-file, -AREA, -COUNT) %>%
   pivot_wider(names_from = timestep, values_from = MEAN)
 
+dbf_wide %>%
+  mutate(delta = t6 - t0) %>%
+  ggplot(aes(x = delta)) +
+  geom_density() +
+  theme_minimal() +
+  facet_wrap(~climate_model)
+
 # Koala habitat sizes in each property
 khab_thres <- read_csv('data/khab_prop.csv') %>%
   rename(NewPropID = NEWPROPID) %>%

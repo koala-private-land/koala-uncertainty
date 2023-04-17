@@ -4,7 +4,6 @@ library(DescTools)
 source('code/load_paths.R')
 
 cost_pred <- read_csv("data/spatial_predictions_10yr.csv")
-properties <- st_read(paste0(rdm_path, properties_path), layer = "spatial_pred_10yr_v1_0")
 
 split_by_pct <- function(x, n_pct=5) {
   # Splits a random variable into a groups by percentile
