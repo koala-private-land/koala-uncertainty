@@ -4,6 +4,9 @@ using CSV
 using DataFrames
 using Gurobi
 
+include("optim-functions.jl")
+
+
 adoption_subset = CSV.read("data/adoption_subset.csv", DataFrame)
 
 function cost_to_ts(cost, area, adopt, idx_before=1:30, idx_after=31:60, inflation_rate = 0.02)
@@ -53,6 +56,8 @@ end
     end
 end
 
+
+
 metric_subset = CSV.read("data/metric_subset.csv", DataFrame)
 tt = 4;
 t_symbols = [:t0, :t1, :t2, :t3, :t4, :t5, :t6, :t7];
@@ -84,8 +89,29 @@ K = 7000;
 sm = @stochastic_model begin
     @stage 1 begin
         @decision(model, 0 <= x[1:N] <= 1) # First stage decision
-        @decision(model, 0 <= y[1:N, 1:S] <= (add_recourse ? 1 : 0)) # Second stage decision: adding units
-        @decision(model, 0 <= w[1:N, 1:S] <= (terminate_recourse ? 1 : 0)) # Second stage decision: terminating units
+        @variable(model, y[1:N, 1:S]) # Second stage decision: adding units
+        @variable(model, w[1:N, 1:S]) # Second stage decision: terminating units
+        
+        if (add_recourse)
+            @constraint(model, 0 <= y[1:N, 1:S] <= 1) # Second stage decision: adding units    
+        else
+            for i = 1:N
+                for s = 1:S
+                    fix(y[i,s], 0);
+                end
+            end
+        end
+
+        if (terminate_recourse)
+            @constraint(model, 0 <= w[1:N, 1:S] <= 1) # Second stage decision: terminating units
+        else
+            for i = 1:N
+                for s = 1:S
+                    fix(w[i,s], 0);
+                end
+            end
+        end
+
 
         for i = 1:N
             for s = 1:S
@@ -124,10 +150,29 @@ sm = @stochastic_model begin
     end
 end
 
+function ExpectationRealisation(Adopt, Prop, WTA, Area, M₁, M₂)
+    MeanAdopt = Adopt[:,1]
+    SDAdopt = Adopt[:,2]
+    MeanProp = Prop[:,1]
+    SDProp = Prop[:,2]
+    MeanWTA = WTA[:,1]
+    SDWTA = WTA[:,2]
+    adopt_binary = MeanAdopt
+    (cost_before, cost_after) = cost_to_ts(MeanWTA, Area, MeanProp)
+    sample_C₁ = cost_before .* adopt_binary
+    sample_C₂ = cost_after .* adopt_binary
+    sample_M₁ = M₁ .* adopt_binary
+    sample_M₂ = M₂ .* adopt_binary
+    return Realisation(sample_C₁, sample_C₂, sample_M₁, sample_M₂)
+end
 
-sp = instantiate(sm, sampler, 100, optimizer = LShaped.Optimizer)
-set_optimizer(sm, LShaped.Optimizer)
-set_optimizer_attribute(sp, MasterOptimizer(), () -> Gurobi.Optimizer(OutputFlag=1))
-set_optimizer_attribute(sp, SubProblemOptimizer(), () -> Gurobi.Optimizer(OutputFlag=1))
+r = ExpectationRealisation(Matrix(adoption_subset[:,[:MeanAdopt, :SDAdopt]]), Matrix(adoption_subset[:,[:MeanProp, :SDProp]]), Matrix(adoption_subset[:,[:MeanWTA, :SDWTA]]), Vector(adoption_subset.:AREA), M₁, M₂)
 
-optimize!(sp)
+model = fcn_two_stage_opt_robust(r);
+
+#sp = instantiate(sm, sampler, 5, optimizer = LShaped.Optimizer)
+#set_optimizer(sm, LShaped.Optimizer)
+#set_optimizer_attribute(sp, MasterOptimizer(), Gurobi.Optimizer)
+#set_optimizer_attribute(sp, SubProblemOptimizer(), Gurobi.Optimizer)
+
+#optimize!(sp)

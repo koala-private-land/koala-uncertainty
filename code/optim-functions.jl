@@ -1,6 +1,7 @@
 # Solve a two-stage stochastic optimisation problem with JuMP where uncertainty is fully revealed in time τ
 # Objective: minimise cost subject to a metric reaching a threshold across all time periods
-using JuMP, Gurobi, StochasticPrograms
+
+using Grisu, JuMP, Gurobi, StochasticPrograms, JuMPeR
 
 Base.@kwdef mutable struct Realisation
     # C₁: first stage costs, each element of the vector is for each property unit (size: N, N: number of units)
@@ -201,6 +202,107 @@ function fcn_two_stage_opt_saa(realisations=AbstractSampler; K::Real=7000, β::R
         y=value.(y),
         w=value.(w)
     )
+end
+
+function fcn_two_stage_opt_robust(realisations::Realisation; Ω::AbstractFloat=sqrt(2*log(1/0.1))*sqrt(size(realisations.C₁,1)), K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true)
+    # Solve the deterministic equivalent of the two-stage problem with sample average approximation
+    # The conservation targets must be reached robustly
+    
+    # Arguments
+    # realisations: a vector of Realisations
+    # K: management objective
+
+    N, S = get_properties(realisations) # N: number of units, S: number of climate scenarios
+    model = Model(Gurobi.Optimizer)
+    #set_silent(model)
+    @variable(model, 0 <= x[1:N] <= 1) # First stage decision
+    @variable(model, y[1:N, 1:S]) # Second stage decision: adding units
+    @variable(model, w[1:N, 1:S]) # Second stage decision: terminating units
+    @variable(model, z) # Worst-case costs across all cost realisations
+    @objective(model, Min, z)
+
+    if (add_recourse)
+        @constraint(model, 0 .<= y .<= 1) # Second stage decision: adding units    
+    else
+        for i = 1:N
+            for s = 1:S
+                fix(y[i,s], 0);
+            end
+        end
+    end
+
+    if (terminate_recourse)
+        @constraint(model, 0 .<= w .<= 1) # Second stage decision: terminating units
+    else
+        for i = 1:N
+            for s = 1:S
+                fix(w[i,s], 0);
+            end
+        end
+    end
+
+    C₁ = realisations.C₁ #.* realisations[j].A # First-stage cost under the J-th realisation
+    C₂ = realisations.C₂ #.* realisations[j].A # Second-stage cost under the J-th realisation
+    M₁ = realisations.M₁ #.* realisations[j].A
+    M₂ = realisations.M₂ #.* realisations[j].A
+    p = realisations.p  # Climate scenario probabilities
+
+    # Objective is to minimise the worst-case (highest) costs, z
+    @constraint(model, z >= sum((C₁ .+ C₂)' * x) + sum(p[s] * sum((β + C₂[i]) * y[i, s] + (γ - C₂[i]) * w[i, s] for i in 1:N) for s in 1:S))
+
+    if !isdefined(Ω, :num)
+        ϵ = 0.1; # 10% chance of violating the constraint
+        Ω = sqrt(2 * log(1 / ϵ))*sqrt(N);
+        println("Omega not assigned, using default value of $Ω for $((1-ϵ)*100)% probabilistic guarantee")
+    end
+
+    # Objective must be reached across all climate realisations before climate is known
+    @uncertain(model, M₁_z[1:N, 1:size(M₁,2), 1:S])
+
+    for t in axes(M₁, 2)
+        for s in 1:S
+            @constraint(model, ((M₁[:, t, s] .* M₁_z[:, t, s])' * x) >= K)
+            @constraint(model, norm(M₁_z[:, t, s], 1) <= Ω)
+            @constraint(model, norm(M₁_z[:, t, s], Inf) <= 1)
+        end
+    end
+
+    # After uncertainty is revealed, the objective only needs to be met at that realised climate realisation
+    @variable(model, M₂_z[1:N, 1:size(M₂,2), 1:S])
+    for t in axes(M₂, 2)
+        for s = 1:S
+            @constraint(model, (M₂[:, t, s] .* M₂_z[:, t, s])' * (x + y[:, s] - w[:, s]) >= K)
+            @constraint(model, norm(M₂_z[:, t, s], 1) <= Ω)
+            @constraint(model, norm(M₂_z[:, t, s], Inf) <= 1)
+        end
+    end
+
+
+    if (add_recourse)
+        for i = 1:N
+            for s = 1:S
+                @constraint(model, x[i] + y[i, s] <= 1)
+            end
+        end
+    end
+
+    if (terminate_recourse)
+        for i = 1:N
+            for s = 1:S
+                @constraint(model, x[i] - w[i, s] >= 0)
+            end
+        end
+    end
+    return(model)
+    #optimize!(model)
+
+    #return (
+    #    model=model,
+    #    obj_value=objective_value(model),
+    #    x=value.(x),
+    #    y=value.(y),
+    #    w=value.(w)
+    #)
 end
 
 function fcn_evaluate_solution(model::Model, realisations::Vector{Realisation})
