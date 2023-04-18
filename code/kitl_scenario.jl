@@ -168,11 +168,12 @@ end
 
 r = ExpectationRealisation(Matrix(adoption_subset[:,[:MeanAdopt, :SDAdopt]]), Matrix(adoption_subset[:,[:MeanProp, :SDProp]]), Matrix(adoption_subset[:,[:MeanWTA, :SDWTA]]), Vector(adoption_subset.:AREA), M₁, M₂)
 
-model = fcn_two_stage_opt_robust(r);
 
-#sp = instantiate(sm, sampler, 5, optimizer = LShaped.Optimizer)
-#set_optimizer(sm, LShaped.Optimizer)
-#set_optimizer_attribute(sp, MasterOptimizer(), Gurobi.Optimizer)
-#set_optimizer_attribute(sp, SubProblemOptimizer(), Gurobi.Optimizer)
+#solution = fcn_two_stage_opt_saa(r);
 
-#optimize!(sp)
+sp = instantiate(sm, sampler, 5, optimizer = LShaped.Optimizer)
+set_optimizer(sm, LShaped.Optimizer)
+set_optimizer_attribute(sp, MasterOptimizer(), Gurobi.Optimizer)
+set_optimizer_attribute(sp, SubProblemOptimizer(), Gurobi.Optimizer)
+
+optimize!(sp)
