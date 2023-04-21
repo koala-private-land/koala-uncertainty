@@ -1,7 +1,7 @@
 # Solve a two-stage stochastic optimisation problem with JuMP where uncertainty is fully revealed in time τ
 # Objective: minimise cost subject to a metric reaching a threshold across all time periods
 
-using JuMP, Gurobi
+using JuMP, Gurobi, Random
 
 Base.@kwdef mutable struct Realisation
     # C₁: first stage costs, each element of the vector is for each property unit (size: N, N: number of units)
@@ -137,15 +137,22 @@ end
 #     )
 # end
 
-function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true)
+function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true, ns::Integer = 1)
     # Solve the deterministic equivalent of the two-stage problem with sample average approximation
 
     # Arguments
     # realisations: a vector of Realisations
     # K: management objective
+    # β: cost of adding a unit in the second stage
+    # γ: cost of terminating a unit in the second stage
+    # add_recourse: whether to allow recourse to adding units in the second stage
+    # terminate_recourse: whether to allow recourse to terminating units in the second stage
+    # ns: number of scenarios in each resolution of uncertainty
 
     N, S = get_properties(realisations[1]) # N: number of units, S: number of climate scenarios
     J = length(realisations) # J: number of realisations of adoption behaviour
+    s_vec = fcn_resolve_scenario_incomplete(S, S, ns)
+
     model = Model(Gurobi.Optimizer)
     #set_silent(model)
     @variable(model, 0 <= x[1:N] <= 1) # First stage decision
@@ -173,10 +180,10 @@ function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, �
         M₁ = realisations[j].M₁ #.* realisations[j].A
         M₂ = realisations[j].M₂ #.* realisations[j].A
         # Objective must be reached across all climate realisations before climate is known
-        @constraint(model, [t in axes(M₁, 2), s in 1:S], sum(M₁[:, t, s]' * x) >= K)
+        @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K)
 
         # After uncertainty is revealed, the objective only needs to be met at that realised climate realisation
-        @constraint(model, [t in axes(M₂, 2), s in 1:S], sum(M₂[:, t, s]' * (x .+ (add_recourse ? y[:, s] : 0) .- (terminate_recourse ? w[:, s] : 0))) >= K)
+        @constraint(model, [t in axes(M₂, 2), s in 1:S], M₂[:, t, s_vec[s]]' * (x .+ (add_recourse ? y[:, s] : 0) .- (terminate_recourse ? w[:, s] : 0)) .>= K)
     end
 
     optimize!(model)
@@ -317,4 +324,19 @@ function fcn_evaluate_solution(model::Model, realisations::Vector{Realisation})
     end
 
     return (cost_mat, metric_mat)
+end
+
+
+function fcn_resolve_scenario_incomplete(S::Integer=12, N::Integer=12, ns::Integer=2)
+    # S: Number of possible resolutions of uncertainty
+    # N: Number of scenarios
+    # ns: Number of scenarios in each resolution of uncertainty
+    if (ns > N)
+        error("ns must be less than or equal to N")
+    end
+    if (ns == 1 && N<=S)
+        return(1:N)
+    else
+        return([sort(randperm(N)[1:ns]) for s in 1:S])
+    end
 end
