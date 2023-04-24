@@ -4,46 +4,60 @@ using Revise;
 includet("optim-functions.jl")
 
 Random.seed!(1234);
-N = 17276; # planning units
+N = 2000; # planning units
 S = 36; # uncertain scenarios
-years = [2025,2035,2045,2055,2065,2075,2085];
+years = [2025, 2035, 2045, 2055, 2065, 2075, 2085];
 T = length(years); # timesteps
-δ = (1+0.02) .^ (years .- 2022);
+δ = (1 + 0.02) .^ (years .- 2022);
 tt = 4; # Timestep when uncertainty is revealed
 
-A = rand(N,1); # Area
+A = rand(N, 1); # Area
 
-C = repeat(A.*5 + 0.5.*rand(Normal(0,0.1), N), outer= [1,T]);
-C = C .* repeat(δ', outer=[N,1]);
-C[C .< 0] .= 0;
+C = repeat(A .* 5 + 0.5 .* rand(Normal(0, 0.1), N), outer=[1, T]);
+C = C .* repeat(δ', outer=[N, 1]);
+C[C.<0] .= 0;
 
 function simulate_ar(phi, n)
-    dist = Normal(0,0.1)
+    dist = Normal(0, 0.1)
     y = [0.0 for i = 1:n]
     noise = rand(dist, n)
     for i in 1:(n-1)
-        y[i+1] = phi*y[i] + noise[i] 
+        y[i+1] = phi * y[i] + noise[i]
     end
     return y
 end
 
 m = rand(N); # Initial metric
-M = [map((i->i.+simulate_ar(0.5,T)),m) |> (i->reduce(hcat,i)') for s in 1:S ];
-for s=1:S
-    M[s][M[s] .< 0] .= 0.0;
-    M[s][M[s] .> 1] .= 1.0;
+M = [map((i -> i .+ simulate_ar(0.5, T)), m) |> (i -> reduce(hcat, i)') for s in 1:S];
+for s = 1:S
+    M[s][M[s].<0] .= 0.0
+    M[s][M[s].>1] .= 1.0
 end
 Mp = zeros(N, T, S);
-for s=1:S
-Mp[:,:,s] = M[s];
+for s = 1:S
+    Mp[:, :, s] = M[s]
 end
 M = Mp;
 
 p = rand(S);
-p = p./sum(p);
+p = p ./ sum(p);
 
 β = 0.5;
 γ = 0.5;
 K = 50.0;
 
-solution = fcn_two_stage_opt(C, M, K, p, 3);
+tt = 4;
+
+solution = fcn_two_stage_opt(C, M, K, p, tt);
+
+M₁ = zeros(N, length(1:(tt-1)), S)
+M₂ = zeros(N, length(tt:T), S)
+
+for s in 1:S
+    M₁[:, :, s] = M[:, 1:(tt-1), s]
+    M₂[:, :, s] = M[:, tt:end, s]
+end
+
+r = Realisation(sum.(eachrow(C[:, 1:(tt-1)])), sum.(eachrow(C[:, tt:end])), M₁, M₂)
+solution_new = fcn_two_stage_opt_saa([r], K=K);
+
