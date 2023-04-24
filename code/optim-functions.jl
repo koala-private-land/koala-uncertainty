@@ -154,7 +154,7 @@ function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, Î
     s_vec = fcn_resolve_scenario_incomplete(S, S, ns)
 
     model = Model(Gurobi.Optimizer)
-    #set_silent(model)
+    set_silent(model)
     @variable(model, 0 <= x[1:N] <= 1) # First stage decision
     @variable(model, z) # Worst-case costs across all cost realisations
     @objective(model, Min, z)

@@ -30,11 +30,11 @@ K = 7000; # Habitat protection goal
 mutable struct Solution
     feasible::Bool
     model::Model
-    x::Vector
-    y::Matrix
-    w::Matrix
-    cost::Matrix
-    metric::Matrix
+    x::AbstractArray
+    y::AbstractArray
+    w::AbstractArray
+    cost::AbstractArray
+    metric::AbstractArray
 end
 
 function cost_to_ts(cost::AbstractVector, area::AbstractVector, adopt::AbstractVector, idx_before::AbstractVector=1:30, idx_after::AbstractVector=31:60, inflation_rate::AbstractFloat=0.02)
@@ -127,20 +127,22 @@ function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratifie
     println("Value of full recourse ($(run_string)): $(round(median_fr*100))% [$(round(lb_fr*100))% - $(round(ub_fr*100))%]")
 
     # Save results
-    CSV.write(cost_nr, "$(out_dir)/cost_nr_$(run_string).csv")
-    CSV.write(cost_ar, "$(out_dir)/cost_ar_$(run_string).csv")
-    CSV.write(cost_tr, "$(out_dir)/cost_tr_$(run_string).csv")
-    CSV.write(cost_fr, "$(out_dir)/cost_fr_$(run_string).csv")
+    
+    CSV.write("$(out_dir)/cost_nr_$(run_string).csv", DataFrame(cost_nr, :auto))
+    CSV.write("$(out_dir)/cost_ar_$(run_string).csv", DataFrame(cost_ar, :auto))
+    CSV.write("$(out_dir)/cost_tr_$(run_string).csv", DataFrame(cost_tr, :auto))
+    CSV.write("$(out_dir)/cost_fr_$(run_string).csv", DataFrame(cost_fr, :auto))
 
-    CSV.write(metric_nr, "$(out_dir)/metric_nr_$(run_string).csv")
-    CSV.write(metric_ar, "$(out_dir)/metric_ar_$(run_string).csv")
-    CSV.write(metric_tr, "$(out_dir)/metric_tr_$(run_string).csv")
-    CSV.write(metric_fr, "$(out_dir)/metric_fr_$(run_string).csv")
+    metric_reshape = m -> DataFrame(reshape(permutedims(m, (1,3,2)), (size(m,1)*size(m,3), size(m,2))), :auto)
+    CSV.write("$(out_dir)/metric_nr_$(run_string).csv", metric_reshape(metric_nr))
+    CSV.write("$(out_dir)/metric_ar_$(run_string).csv", metric_reshape(metric_ar))
+    CSV.write("$(out_dir)/metric_tr_$(run_string).csv", metric_reshape(metric_tr))
+    CSV.write("$(out_dir)/metric_fr_$(run_string).csv", metric_reshape(metric_fr))
 
-    out_nr = Solution(True, solution_nr.model, solution_nr.x, solution_nr.y, solution_nr.w, cost_nr, metric_nr)
-    out_ar = Solution(True, solution_ar.model, solution_ar.x, solution_ar.y, solution_ar.w, cost_ar, metric_ar)
-    out_tr = Solution(True, solution_tr.model, solution_tr.x, solution_tr.y, solution_tr.w, cost_tr, metric_tr)
-    out_fr = Solution(True, solution_fr.model, solution_fr.x, solution_fr.y, solution_fr.w, cost_fr, metric_fr)
+    out_nr = Solution(true, solution_nr.model, solution_nr.x, solution_nr.y, solution_nr.w, cost_nr, metric_nr)
+    out_ar = Solution(true, solution_ar.model, solution_ar.x, solution_ar.y, solution_ar.w, cost_ar, metric_ar)
+    out_tr = Solution(true, solution_tr.model, solution_tr.x, solution_tr.y, solution_tr.w, cost_tr, metric_tr)
+    out_fr = Solution(true, solution_fr.model, solution_fr.x, solution_fr.y, solution_fr.w, cost_fr, metric_fr)
     @save "$(out_dir)/solution_$(run_string).jld" out_nr out_ar out_tr out_fr
 end
 
@@ -148,18 +150,22 @@ end
 
 # Sensitivity parameters (base)
 sp = 1; # 1:10
+sp_vec = 1:10
 tt = 4; # [1,2,3,4,5,6,7]
+tt_vec = 1:7
 kt = 0.25; # [0.1, 0.15, 0.2, 0.25, 0.3]
+kt_vec = [0.1, 0.15, 0.2, 0.25, 0.3]
 ns = 1; # 1:12
+ns_vec = 1:12
 
 # Run across different sampled properties
-map(1:10, (sp_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp_i, tt, kt, ns))
+map((sp_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp_i, tt, kt, ns), sp_vec)
 
 # Run across different time periods for tt
-map(1:7, (tt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt_i, kt, ns))
+map((tt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt_i, kt, ns), tt_vec)
 
 # Run across all kt
-map([0.1, 0.15, 0.2, 0.25, 0.3], (kt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt_i, ns))
+map((kt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt_i, ns), kt_vec)
 
 # Run across all ns, number of scenarios in resolved uncertainty
-map(1:12, (ns_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns_i)
+map((ns_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns_i), ns_vec)
