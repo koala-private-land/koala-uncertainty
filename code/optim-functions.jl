@@ -137,7 +137,7 @@ end
 #     )
 # end
 
-function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true, ns::Integer = 1)
+function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true, ns::Integer=1)
     # Solve the deterministic equivalent of the two-stage problem with sample average approximation
 
     # Arguments
@@ -151,7 +151,7 @@ function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, �
 
     N, S = get_properties(realisations[1]) # N: number of units, S: number of climate scenarios
     J = length(realisations) # J: number of realisations of adoption behaviour
-    s_vec = fcn_resolve_scenario_incomplete(S, S, ns)
+    s_vec = fcn_resolve_scenario_incomplete(ns)
 
     model = Model(Gurobi.Optimizer)
     set_silent(model)
@@ -160,8 +160,8 @@ function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, �
     @objective(model, Min, z)
 
     # Objective is to minimise expected costs, z
-    C₁ = dropdims(mean(cat([realisations[j].C₁ for j in 1:J]..., dims = 3), dims = 3), dims = 3) #.* realisations[j].A # First-stage cost under the J-th realisation
-    C₂ = dropdims(mean(cat([realisations[j].C₂ for j in 1:J]..., dims = 3), dims = 3), dims = 3) #.* realisations[j].A # Second-stage cost under the J-th realisation
+    C₁ = dropdims(mean(cat([realisations[j].C₁ for j in 1:J]..., dims=3), dims=3), dims=3) #.* realisations[j].A # First-stage cost under the J-th realisation
+    C₂ = dropdims(mean(cat([realisations[j].C₂ for j in 1:J]..., dims=3), dims=3), dims=3) #.* realisations[j].A # Second-stage cost under the J-th realisation
     p = realisations[1].p  # Climate scenario probabilities
 
     if (add_recourse)
@@ -199,7 +199,7 @@ end
 # function fcn_two_stage_opt_robust(realisations::Realisation; Ω::AbstractFloat=sqrt(2*log(1/0.1))*sqrt(size(realisations.C₁,1)), K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true)
 #     # Solve the deterministic equivalent of the two-stage problem with sample average approximation
 #     # The conservation targets must be reached robustly
-    
+
 #     # Arguments
 #     # realisations: a vector of Realisations
 #     # K: management objective
@@ -301,15 +301,15 @@ function fcn_evaluate_solution(model::Model, realisations::Vector{Realisation})
     # model: Solved JuMP model
     # realisations: a vector of realisations
 
-    
+
     J = length(realisations)
     N, S = get_properties(realisations[1])
     T = size(realisations[1].M₁, 2) + size(realisations[1].M₂, 2)
-    
+
     x = value.(model[:x])
-    y = haskey(model, :y) ? value.(model[:y]) : zeros(N,S)
-    w = haskey(model, :w) ? value.(model[:w]) : zeros(N,S)
-    
+    y = haskey(model, :y) ? value.(model[:y]) : zeros(N, S)
+    w = haskey(model, :w) ? value.(model[:w]) : zeros(N, S)
+
     cost_mat = zeros(S, J)
     metric_mat = zeros(S, T, J)
 
@@ -327,16 +327,18 @@ function fcn_evaluate_solution(model::Model, realisations::Vector{Realisation})
 end
 
 
-function fcn_resolve_scenario_incomplete(S::Integer=12, N::Integer=12, ns::Integer=2)
+function fcn_resolve_scenario_incomplete(ns::Integer=2; S::Integer=12, N::Integer=12)
     # S: Number of possible resolutions of uncertainty
     # N: Number of scenarios
     # ns: Number of scenarios in each resolution of uncertainty
     if (ns > N)
         error("ns must be less than or equal to N")
     end
-    if (ns == 1 && N<=S)
-        return(1:N)
+    if (ns == 1 && N <= S)
+        return (1:N)
     else
-        return([sort(randperm(N)[1:ns]) for s in 1:S])
+        generate_scen = () -> vcat(shuffle([randperm(3) .+ (a - 1) * 3 for a in 1:4])...)
+        return ([sort(generate_scen()[1:ns]) for s in 1:S])
     end
 end
+

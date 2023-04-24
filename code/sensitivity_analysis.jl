@@ -23,8 +23,8 @@ stratified_samples = CSV.read("data/stratified_sample.csv", DataFrame);
 climateProjList = ["CCCMA_R1", "CCCMA_R2", "CCCMA_R3", "CSIRO_R1", "CSIRO_R2", "CSIRO_R3", "ECHAM_R1", "ECHAM_R2", "ECHAM_R3", "MIROC_R1", "MIROC_R2", "MIROC_R3"];
 
 # Constants
-R = 5; # Total number of uncertainty realisations
-rr = 1; # Sampled realisations
+R = 100; # Total number of uncertainty realisations
+rr = 5; # Sampled realisations
 K = 7000; # Habitat protection goal
 
 mutable struct Solution
@@ -48,8 +48,8 @@ function cost_to_ts(cost::AbstractVector, area::AbstractVector, adopt::AbstractV
 end
 
 function subset_data(cost_full, kitl_index_full, subset_id::Vector{Int64})
-    cost_subset = filter(row -> row.NewPropID ∈ subset_id, cost_full);
-    kitl_subset = filter(row -> row.NewPropID ∈ subset_id, kitl_index_full);
+    cost_subset = filter(row -> row.NewPropID ∈ subset_id, cost_full)
+    kitl_subset = filter(row -> row.NewPropID ∈ subset_id, kitl_index_full)
     filter!(row -> row.NewPropID ∈ kitl_subset.NewPropID, cost_subset)
     filter!(row -> row.NewPropID ∈ cost_subset.NewPropID, kitl_subset)
     return (cost_subset, kitl_subset)
@@ -65,28 +65,28 @@ function metric_to_input(metric::DataFrame, area::AbstractVector, tt::Integer, k
     M₂ = zeros(N, length(tt:length(t_symbols)), S)
     for t = eachindex(t_symbols)
         metric_unstacked = unstack(metric, :NewPropID, :climate_model, t_symbols[t])
-        metric_mat = Matrix(metric_unstacked[:, climateProjList]);
+        metric_mat = Matrix(metric_unstacked[:, climateProjList])
         metric_threshold_mat = (metric_mat .> kt)
         if (t < tt)
-            M₁[:, t, :] = metric_threshold_mat .* area 
+            M₁[:, t, :] = metric_threshold_mat .* area
         else
             M₂[:, t-tt+1, :] = metric_threshold_mat .* area
         end
     end
-    return(M₁, M₂)
+    return (M₁, M₂)
 end
 
 function realisation_sample(cost_subset::DataFrame, kitl_subset::DataFrame, tt::Integer=4, kt::AbstractFloat=0.25)
-    (M₁, M₂) = metric_to_input(kitl_subset, vec(cost_subset.AREA), tt, kt);
+    (M₁, M₂) = metric_to_input(kitl_subset, vec(cost_subset.AREA), tt, kt)
     MeanAdopt = cost_subset.MeanAdopt
     SDAdopt = cost_subset.SDAdopt
     MeanProp = cost_subset.MeanProp
     SDProp = cost_subset.SDProp
     MeanWTA = cost_subset.MeanWTA
     SDWTA = cost_subset.SDWTA
-    adopt_binary = (rand.(Normal.(MeanAdopt,SDAdopt))) .> rand(length(MeanAdopt))
-    prop = (rand.(Normal.(MeanProp,SDProp))) .* adopt_binary
-    (C₁, C₂) = cost_to_ts(MeanWTA + SDWTA .* randn(length(SDWTA)), cost_subset.AREA, cost_subset.MeanAdopt, 1:(10*(tt-1)), (1+10*(tt-1)):60, 0.02);
+    adopt_binary = (rand.(Normal.(MeanAdopt, SDAdopt))) .> rand(length(MeanAdopt))
+    prop = (rand.(Normal.(MeanProp, SDProp))) .* adopt_binary
+    (C₁, C₂) = cost_to_ts(MeanWTA + SDWTA .* randn(length(SDWTA)), cost_subset.AREA, cost_subset.MeanAdopt, 1:(10*(tt-1)), (1+10*(tt-1)):60, 0.02)
     sample_C₁ = C₁ .* prop
     sample_C₂ = C₂ .* prop
     sample_M₁ = M₁ .* prop
@@ -96,44 +96,44 @@ end
 
 function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer)
     # Subset of properties
-    run_string = "run_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)"
-    subset_id = vec(stratified_samples[:,sp]);
-    (cost_subset, kitl_subset) = subset_data(cost_df, kitl_index_full, subset_id);
-    realisations = [realisation_sample(cost_subset, kitl_subset, tt, kt) for r in 1:R];
-    worst_case_khab = minimum([minimum(sum(realisations[r].M₂, dims = 1)) for r in 1:rr]);
+    run_string = "run_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)_r-$(rr)"
+    subset_id = vec(stratified_samples[:, sp])
+    (cost_subset, kitl_subset) = subset_data(cost_df, kitl_index_full, subset_id)
+    realisations = [realisation_sample(cost_subset, kitl_subset, tt, kt) for r in 1:R]
+    worst_case_khab = minimum([minimum(sum(realisations[r].M₂, dims=1)) for r in 1:rr])
     if (worst_case_khab < K)
         println("Constraint infeasible for this scenario")
         return
     else
-        solution_nr = fcn_two_stage_opt_saa(realisations[1:rr]; K = 7000, ns=ns, terminate_recourse = false, add_recourse = false)
-        solution_ar = fcn_two_stage_opt_saa(realisations[1:rr]; K = 7000, ns=ns, terminate_recourse = false, add_recourse = true)
-        solution_tr = fcn_two_stage_opt_saa(realisations[1:rr]; K = 7000, ns=ns, terminate_recourse = true, add_recourse = false)
-        solution_fr = fcn_two_stage_opt_saa(realisations[1:rr]; K = 7000, ns=ns, terminate_recourse = true, add_recourse = true)
+        solution_nr = fcn_two_stage_opt_saa(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=false)
+        solution_ar = fcn_two_stage_opt_saa(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=true)
+        solution_tr = fcn_two_stage_opt_saa(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=true, add_recourse=false)
+        solution_fr = fcn_two_stage_opt_saa(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=true, add_recourse=true)
     end
 
-    (cost_nr, metric_nr) = fcn_evaluate_solution(solution_nr.model, realisations);
-    (cost_ar, metric_ar) = fcn_evaluate_solution(solution_ar.model, realisations);
-    (cost_tr, metric_tr) = fcn_evaluate_solution(solution_tr.model, realisations);
-    (cost_fr, metric_fr) = fcn_evaluate_solution(solution_fr.model, realisations);
+    (cost_nr, metric_nr) = fcn_evaluate_solution(solution_nr.model, realisations)
+    (cost_ar, metric_ar) = fcn_evaluate_solution(solution_ar.model, realisations)
+    (cost_tr, metric_tr) = fcn_evaluate_solution(solution_tr.model, realisations)
+    (cost_fr, metric_fr) = fcn_evaluate_solution(solution_fr.model, realisations)
 
-    median_ar = median((cost_ar.-cost_nr)./cost_nr)
-    lb_ar = quantile(vec((cost_ar.-cost_nr)./cost_nr), 0.025)
-    ub_ar = quantile(vec((cost_ar.-cost_nr)./cost_nr), 0.975)
+    median_ar = median((cost_ar .- cost_nr) ./ cost_nr)
+    lb_ar = quantile(vec((cost_ar .- cost_nr) ./ cost_nr), 0.025)
+    ub_ar = quantile(vec((cost_ar .- cost_nr) ./ cost_nr), 0.975)
     println("Value of recourse to add covenants ($(run_string)): $(round(median_ar*100))% [$(round(lb_ar*100))% - $(round(ub_ar*100))%]")
 
-    median_fr = median((cost_fr.-cost_nr)./cost_nr)
-    lb_fr = quantile(vec((cost_fr.-cost_nr)./cost_nr), 0.025)
-    ub_fr = quantile(vec((cost_fr.-cost_nr)./cost_nr), 0.975)
+    median_fr = median((cost_fr .- cost_nr) ./ cost_nr)
+    lb_fr = quantile(vec((cost_fr .- cost_nr) ./ cost_nr), 0.025)
+    ub_fr = quantile(vec((cost_fr .- cost_nr) ./ cost_nr), 0.975)
     println("Value of full recourse ($(run_string)): $(round(median_fr*100))% [$(round(lb_fr*100))% - $(round(ub_fr*100))%]")
 
     # Save results
-    
+
     CSV.write("$(out_dir)/cost_nr_$(run_string).csv", DataFrame(cost_nr, :auto))
     CSV.write("$(out_dir)/cost_ar_$(run_string).csv", DataFrame(cost_ar, :auto))
     CSV.write("$(out_dir)/cost_tr_$(run_string).csv", DataFrame(cost_tr, :auto))
     CSV.write("$(out_dir)/cost_fr_$(run_string).csv", DataFrame(cost_fr, :auto))
 
-    metric_reshape = m -> DataFrame(reshape(permutedims(m, (1,3,2)), (size(m,1)*size(m,3), size(m,2))), :auto)
+    metric_reshape = m -> DataFrame(reshape(permutedims(m, (1, 3, 2)), (size(m, 1) * size(m, 3), size(m, 2))), :auto)
     CSV.write("$(out_dir)/metric_nr_$(run_string).csv", metric_reshape(metric_nr))
     CSV.write("$(out_dir)/metric_ar_$(run_string).csv", metric_reshape(metric_ar))
     CSV.write("$(out_dir)/metric_tr_$(run_string).csv", metric_reshape(metric_tr))
