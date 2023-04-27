@@ -27,7 +27,7 @@ function get_properties(r::Realisation)
     return ((N, S))
 end
 
-function fcn_two_stage_opt(C::Matrix, M::Array{Float64,3}, K::Real, p::Vector=(ones(size(M, 3)) / size(M, 3)), tt::Integer=Integer(round(size(M, 2) / 2)); β::Vector=zeros(size(M, 1)), γ::Vector=zeros(size(M, 1)), add_recourse=true, terminate_recourse=true)
+function fcn_two_stage_opt(C::Matrix, M::Array{Float64,3}, K::Real, p::Vector=(ones(size(M, 3)) / size(M, 3)), tt::Integer=Integer(round(size(M, 2) / 2)); β::Vector=zeros(size(M, 1)), γ::Vector=zeros(size(M, 1)), add_recourse=true, terminate_recourse=true, baseline_conditions=false)
     N, T, S = size(M) # N: number of units, T: number of timesteps, S: number of scenarios
     model = Model(Gurobi.Optimizer)
     set_silent(model)
@@ -35,21 +35,29 @@ function fcn_two_stage_opt(C::Matrix, M::Array{Float64,3}, K::Real, p::Vector=(o
     @variable(model, 0 <= y[1:N, 1:S] <= (add_recourse ? 1 : 0)) # Second stage decision: adding units
     @variable(model, 0 <= w[1:N, 1:S] <= (terminate_recourse ? 1 : 0)) # Second stage decision: terminating units
     @objective(model, Min, sum(C[:, 1:T]' * x) + sum(p[s] * sum((β[i] + C[i, t]) * y[i, s] + (γ[i] - C[i, t]) * w[i, s] for i in 1:N, t in tt:T) for s in 1:S))
-    for t = 1:(tt-1)
-        for s = 1:S
-            @constraint(model, sum(M[:, t, s]' * x) >= K)
-        end
-    end
 
-    for t = tt:T
+    if (baseline_conditions)
+        # Require only baseline conditions be met
         for s = 1:S
-            @constraint(model, sum(M[:, t, s]' * (x + y[:, s] - w[:, s])) >= K)
+            @constraint(model, sum(M[:, 1, s]' * x) >= K)
         end
-    end
+    else
+        for t = 1:(tt-1)
+            for s = 1:S
+                @constraint(model, sum(M[:, t, s]' * x) >= K)
+            end
+        end
 
-    for i = 1:N
-        for s = 1:S
-            @constraint(model, x[i] + y[i, s] <= 1)
+        for t = tt:T
+            for s = 1:S
+                @constraint(model, sum(M[:, t, s]' * (x + y[:, s] - w[:, s])) >= K)
+            end
+        end
+
+        for i = 1:N
+            for s = 1:S
+                @constraint(model, x[i] + y[i, s] <= 1)
+            end
         end
     end
 
@@ -137,7 +145,7 @@ end
 #     )
 # end
 
-function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true, ns::Integer=1)
+function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true, ns::Integer=1, baseline_conditions=false)
     # Solve the deterministic equivalent of the two-stage problem with sample average approximation
 
     # Arguments
@@ -179,11 +187,18 @@ function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, �
     for j = 1:J
         M₁ = realisations[j].M₁ #.* realisations[j].A
         M₂ = realisations[j].M₂ #.* realisations[j].A
-        # Objective must be reached across all climate realisations before climate is known
-        @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K)
 
-        # After uncertainty is revealed, the objective only needs to be met at that realised climate realisation
-        @constraint(model, [t in axes(M₂, 2), s in 1:S], M₂[:, t, s_vec[s]]' * (x .+ (add_recourse ? y[:, s] : 0) .- (terminate_recourse ? w[:, s] : 0)) .>= K)
+        if (baseline_conditions)
+            # Conservation goals only need to met under baseline conditions (i.e. first time step)
+            @constraint(model, [s in 1:S], M₁[:, 1, s]' * x .>= K)
+        else
+            # Objective must be reached across all climate realisations before climate is known
+            @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K)
+
+            # After uncertainty is revealed, the objective only needs to be met at that realised climate realisation
+            @constraint(model, [t in axes(M₂, 2), s in 1:S], M₂[:, t, s_vec[s]]' * (x .+ (add_recourse ? y[:, s] : 0) .- (terminate_recourse ? w[:, s] : 0)) .>= K)
+        end
+
     end
 
     optimize!(model)

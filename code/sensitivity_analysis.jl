@@ -14,6 +14,9 @@ using JuMP
 using StatsPlots
 using Distributions
 using JLD2
+using Random
+
+Random.seed!(54815861)
 
 include("optim-functions.jl")
 
@@ -24,7 +27,7 @@ climateProjList = ["CCCMA_R1", "CCCMA_R2", "CCCMA_R3", "CSIRO_R1", "CSIRO_R2", "
 
 # Constants
 R = 100; # Total number of uncertainty realisations
-rr = 5; # Sampled realisations
+rr = 10; # Sampled realisations
 K = 7000; # Habitat protection goal
 
 mutable struct Solution
@@ -94,13 +97,25 @@ function realisation_sample(cost_subset::DataFrame, kitl_subset::DataFrame, tt::
     return Realisation(sample_C₁, sample_C₂, sample_M₁, sample_M₂, adopt_binary)
 end
 
-function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer)
+function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, baseline_conditions=false)
+    Random.seed!(54815861) # Ensure all realisation samples are the same
     # Subset of properties
     run_string = "run_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)_r-$(rr)"
     subset_id = vec(stratified_samples[:, sp])
     (cost_subset, kitl_subset) = subset_data(cost_df, kitl_index_full, subset_id)
     realisations = [realisation_sample(cost_subset, kitl_subset, tt, kt) for r in 1:R]
     worst_case_khab = minimum([minimum(sum(realisations[r].M₂, dims=1)) for r in 1:rr])
+    metric_reshape = m -> DataFrame(reshape(permutedims(m, (1, 3, 2)), (size(m, 1) * size(m, 3), size(m, 2))), :auto)
+
+    if (baseline_conditions)
+        solution_nr = fcn_two_stage_opt_saa(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=false, baseline_conditions=true)
+        (cost_nr, metric_nr) = fcn_evaluate_solution(solution_nr.model, realisations)
+        CSV.write("$(out_dir)/cost_baseline_$(run_string).csv", DataFrame(cost_nr, :auto))
+        CSV.write("$(out_dir)/metric_baseline_$(run_string).csv", metric_reshape(metric_nr))
+        out_nr = Solution(true, solution_nr.model, solution_nr.x, solution_nr.y, solution_nr.w, cost_nr, metric_nr)
+        @save "$(out_dir)/solution_baseline_$(run_string).jld" out_nr
+        return out_nr
+    end
     if (worst_case_khab < K)
         println("Constraint infeasible for this scenario")
         return
@@ -127,13 +142,11 @@ function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratifie
     println("Value of full recourse ($(run_string)): $(round(median_fr*100))% [$(round(lb_fr*100))% - $(round(ub_fr*100))%]")
 
     # Save results
-
     CSV.write("$(out_dir)/cost_nr_$(run_string).csv", DataFrame(cost_nr, :auto))
     CSV.write("$(out_dir)/cost_ar_$(run_string).csv", DataFrame(cost_ar, :auto))
     CSV.write("$(out_dir)/cost_tr_$(run_string).csv", DataFrame(cost_tr, :auto))
     CSV.write("$(out_dir)/cost_fr_$(run_string).csv", DataFrame(cost_fr, :auto))
-
-    metric_reshape = m -> DataFrame(reshape(permutedims(m, (1, 3, 2)), (size(m, 1) * size(m, 3), size(m, 2))), :auto)
+    
     CSV.write("$(out_dir)/metric_nr_$(run_string).csv", metric_reshape(metric_nr))
     CSV.write("$(out_dir)/metric_ar_$(run_string).csv", metric_reshape(metric_ar))
     CSV.write("$(out_dir)/metric_tr_$(run_string).csv", metric_reshape(metric_tr))
@@ -150,7 +163,7 @@ end
 
 # Sensitivity parameters (base)
 sp = 1; # 1:10
-sp_vec = 1:10
+sp_vec = 1:50
 tt = 4; # [1,2,3,4,5,6,7]
 tt_vec = 1:7
 kt = 0.25; # [0.1, 0.15, 0.2, 0.25, 0.3]
@@ -158,8 +171,10 @@ kt_vec = [0.1, 0.15, 0.2, 0.25, 0.3]
 ns = 1; # 1:12
 ns_vec = 1:12
 
-# Run across different sampled properties
-map((sp_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp_i, tt, kt, ns), sp_vec)
+baseline = fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns, true)
+
+# Run across all ns, number of scenarios in resolved uncertainty
+map((ns_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns_i), ns_vec)
 
 # Run across different time periods for tt
 map((tt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt_i, kt, ns), tt_vec)
@@ -167,5 +182,5 @@ map((tt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "resul
 # Run across all kt
 map((kt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt_i, ns), kt_vec)
 
-# Run across all ns, number of scenarios in resolved uncertainty
-map((ns_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns_i), ns_vec)
+# Run across different sampled properties
+map((sp_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp_i, tt, kt, ns), sp_vec)
