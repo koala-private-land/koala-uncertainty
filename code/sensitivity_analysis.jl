@@ -162,9 +162,9 @@ end
 ## Start sensitivity analysis
 
 # Sensitivity parameters (base)
-sp = 1; # 1:10
+sp = 1; # 1:100
 sp_vec = 1:50
-tt = 4; # [1,2,3,4,5,6,7]
+tt = 5; # [0,1,2,3,4,5,6,7]
 tt_vec = 1:7
 kt = 0.25; # [0.1, 0.15, 0.2, 0.25, 0.3]
 kt_vec = [0.1, 0.15, 0.2, 0.25, 0.3]

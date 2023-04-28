@@ -189,8 +189,8 @@ function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, �
         M₂ = realisations[j].M₂ #.* realisations[j].A
 
         if (baseline_conditions)
-            # Conservation goals only need to met under baseline conditions (i.e. first time step)
-            @constraint(model, [s in 1:S], M₁[:, 1, s]' * x .>= K)
+            # Conservation goals only need to met under baseline conditions (i.e. third time step)
+            @constraint(model, [s in 1:S], M₁[:, 3, s]' * x .>= K)
         else
             # Objective must be reached across all climate realisations before climate is known
             @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K)
