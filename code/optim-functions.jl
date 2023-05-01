@@ -8,16 +8,19 @@ Base.@kwdef mutable struct Realisation
     # C₂: second-stage costs, each element of the vector is for each property unit (length: N, N: number of units)
     # M₁: first-stage management objective indicator (size: N x 1)
     # M₂: second-stage management objective indicator, across all scenarios (N x S)
+    # Area: total land area available for conservation
     # A: whether the landholder will consider a covenant or not (binary vector of length N)
     C₁::AbstractArray
     C₂::AbstractArray
     M₁::AbstractArray
     M₂::AbstractArray
+    area::AbstractArray
     A::AbstractArray = ones(size(C₁, 1))
     p::AbstractArray = ones(size(M₂, 2)) / size(M₂, 2)
 
-    function Realisation(C₁, C₂, M₁, M₂, A=ones(size(C₁, 1)), p=ones(size(M₂, 3)) / size(M₂, 3))
-        return (new(C₁, C₂, M₁, M₂, A, p))
+
+    function Realisation(C₁, C₂, M₁, M₂, area, A=ones(size(C₁, 1)), p=ones(size(M₂, 3)) / size(M₂, 3))
+        return (new(C₁, C₂, M₁, M₂, area, A, p))
     end
 end
 

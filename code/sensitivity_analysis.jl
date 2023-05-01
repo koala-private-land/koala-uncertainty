@@ -94,7 +94,14 @@ function realisation_sample(cost_subset::DataFrame, kitl_subset::DataFrame, tt::
     sample_C₂ = C₂ .* prop
     sample_M₁ = M₁ .* prop
     sample_M₂ = M₂ .* prop
-    return Realisation(sample_C₁, sample_C₂, sample_M₁, sample_M₂, adopt_binary)
+    area = vec(cost_subset.AREA) .* prop
+    return Realisation(sample_C₁, sample_C₂, sample_M₁, sample_M₂, area, adopt_binary)
+end
+
+function fcn_tidy_two_stage_solution_sum(solution, prop_id)
+    out = hcat(prop_id, solution.x, sum(solution.y, dims=2), sum(solution.w, dims=2))
+    colnames = vcat(["NewPropID"; "x"; "sum_y"; "sum_w"])
+    return DataFrame(out, colnames)
 end
 
 function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, baseline_conditions=false)
@@ -104,6 +111,9 @@ function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratifie
     subset_id = vec(stratified_samples[:, sp])
     (cost_subset, kitl_subset) = subset_data(cost_df, kitl_index_full, subset_id)
     realisations = [realisation_sample(cost_subset, kitl_subset, tt, kt) for r in 1:R]
+    realisation_areas = hcat([realisations[r].area for r in 1:R]...)
+    realisation_areas_df = DataFrame(realisation_areas, :auto)
+    CSV.write("$(out_dir)/area_$(run_string).csv", realisation_areas_df)
     worst_case_khab = minimum([minimum(sum(realisations[r].M₂, dims=1)) for r in 1:rr])
     metric_reshape = m -> DataFrame(reshape(permutedims(m, (1, 3, 2)), (size(m, 1) * size(m, 3), size(m, 2))), :auto)
 
@@ -113,6 +123,8 @@ function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratifie
         CSV.write("$(out_dir)/cost_baseline_$(run_string).csv", DataFrame(cost_nr, :auto))
         CSV.write("$(out_dir)/metric_baseline_$(run_string).csv", metric_reshape(metric_nr))
         out_nr = Solution(true, solution_nr.model, solution_nr.x, solution_nr.y, solution_nr.w, cost_nr, metric_nr)
+        decision_nr = fcn_tidy_two_stage_solution_sum(solution_nr, cost_subset.NewPropID)
+        CSV.write("$(out_dir)/decision_nr_$(run_string).csv", decision_nr)
         @save "$(out_dir)/solution_baseline_$(run_string).jld" out_nr
         return out_nr
     end
@@ -131,6 +143,11 @@ function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratifie
     (cost_tr, metric_tr) = fcn_evaluate_solution(solution_tr.model, realisations)
     (cost_fr, metric_fr) = fcn_evaluate_solution(solution_fr.model, realisations)
 
+    decision_nr = fcn_tidy_two_stage_solution_sum(solution_nr, cost_subset.NewPropID)
+    decision_ar = fcn_tidy_two_stage_solution_sum(solution_ar, cost_subset.NewPropID)
+    decision_tr = fcn_tidy_two_stage_solution_sum(solution_tr, cost_subset.NewPropID)
+    decision_fr = fcn_tidy_two_stage_solution_sum(solution_fr, cost_subset.NewPropID)
+
     median_ar = median((cost_ar .- cost_nr) ./ cost_nr)
     lb_ar = quantile(vec((cost_ar .- cost_nr) ./ cost_nr), 0.025)
     ub_ar = quantile(vec((cost_ar .- cost_nr) ./ cost_nr), 0.975)
@@ -146,11 +163,16 @@ function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratifie
     CSV.write("$(out_dir)/cost_ar_$(run_string).csv", DataFrame(cost_ar, :auto))
     CSV.write("$(out_dir)/cost_tr_$(run_string).csv", DataFrame(cost_tr, :auto))
     CSV.write("$(out_dir)/cost_fr_$(run_string).csv", DataFrame(cost_fr, :auto))
-    
+
     CSV.write("$(out_dir)/metric_nr_$(run_string).csv", metric_reshape(metric_nr))
     CSV.write("$(out_dir)/metric_ar_$(run_string).csv", metric_reshape(metric_ar))
     CSV.write("$(out_dir)/metric_tr_$(run_string).csv", metric_reshape(metric_tr))
     CSV.write("$(out_dir)/metric_fr_$(run_string).csv", metric_reshape(metric_fr))
+
+    CSV.write("$(out_dir)/decision_nr_$(run_string).csv", decision_nr)
+    CSV.write("$(out_dir)/decision_ar_$(run_string).csv", decision_ar)
+    CSV.write("$(out_dir)/decision_tr_$(run_string).csv", decision_tr)
+    CSV.write("$(out_dir)/decision_fr_$(run_string).csv", decision_fr)
 
     out_nr = Solution(true, solution_nr.model, solution_nr.x, solution_nr.y, solution_nr.w, cost_nr, metric_nr)
     out_ar = Solution(true, solution_ar.model, solution_ar.x, solution_ar.y, solution_ar.w, cost_ar, metric_ar)
@@ -168,7 +190,7 @@ tt = 5; # [0,1,2,3,4,5,6,7]
 tt_vec = 1:7
 kt = 0.25; # [0.1, 0.15, 0.2, 0.25, 0.3]
 kt_vec = [0.1, 0.15, 0.2, 0.25, 0.3]
-ns = 1; # 1:12
+ns = 12; # 1:12
 ns_vec = 1:12
 
 baseline = fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns, true)
