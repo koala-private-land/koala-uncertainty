@@ -7,9 +7,9 @@ library(patchwork)
 library(geodata)
 library(sf)
 library(nngeo)
-library(ggspatial)
 
 results_dir <- "./results/mc_sim/"
+results_dir <- "~/Documents/OneDrive - The University of Queensland/Documents/GitHub/koala-uncertainty/results/mc_sim/"
 
 year_vec <- seq(2000, 2070, by=10)
 
@@ -55,7 +55,7 @@ year_trend_plot <- baseline_robust_df %>%
   geom_hline(yintercept = 7000) +
   geom_vline(xintercept = 2020, linetype = 2, color = 'gray50') +
   geom_vline(xintercept = year_vec[tt], linetype = 2, color = 'gray50') +
-  geom_ribbon(aes(ymin = lb, ymax = ub, fill = model), alpha = 0.2) +
+  geom_ribbon(aes(ymin = lb, ymax = ub, fill = model), alpha = 0.25) +
   geom_line(aes(y = median, color = model), linewidth = 1) +
   geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
   geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% c('F','F+L')), aes(y = median, color = model), size = 2)+
@@ -74,7 +74,7 @@ end_range_plot <- baseline_robust_df %>%
   geom_hline(yintercept = 7000) +
   geom_rect(aes(ymin = lb, ymax = ub, xmin = name_num - 0.4, xmax = name_num + 0.4))+
   geom_segment(aes(y = median, yend = median, x = name_num-0.4, xend = name_num+0.4), color = 'white', linewidth = 1) +
-  geom_text(aes(y = lb - 1000, x = name_num, label = model, color = model), size = 4) +
+  geom_text(aes(y = 0, x = name_num, label = model, color = model), size = 4, vjust = 0) +
   coord_cartesian(ylim = c(0, 15000)) +
   guides(color = 'none', fill = 'none') +
   ggsci::scale_fill_nejm() +
@@ -163,7 +163,7 @@ covenanted_area_plot <- list(baseline = baseline_area_ts, robust = robust_area_t
   ggplot(aes(x = year)) +
   geom_vline(xintercept = 2020, linetype = 2, color = 'gray50') +
   geom_vline(xintercept = year_vec[tt], linetype = 2, color = 'gray50') +
-  geom_ribbon(aes(fill = model, ymin = lb, ymax = ub), alpha = 0.4) +
+  geom_ribbon(aes(fill = model, ymin = lb, ymax = ub), alpha = 0.25) +
   geom_line(data = offered_area, aes(color = model, y = area), linewidth = 1) +
   #geom_line(aes(color = model, y = median)) +
   
@@ -171,7 +171,7 @@ covenanted_area_plot <- list(baseline = baseline_area_ts, robust = robust_area_t
   scale_x_continuous("Year") +
   ggsci::scale_color_nejm() +
   ggsci::scale_fill_nejm() +
-  coord_cartesian(xlim = c(2020,2070), ylim = c(5000, 18000)) +
+  coord_cartesian(xlim = c(2020,2070), ylim = c(4000, 18000)) +
   guides(color = 'none', fill = 'none')+
   ggpubr::theme_pubr() +
   annotate('text', x = mean(c(year_vec[3], year_vec[tt])), y = 18000, color = 'black', label = 'Stage 1') +
@@ -181,7 +181,28 @@ covenanted_area_plot <- list(baseline = baseline_area_ts, robust = robust_area_t
         axis.ticks.x = element_blank(),
         axis.text.x = element_blank())
 
+offered_area_end <- offered_area %>%
+  mutate(name_num = as.numeric(model)) %>%
+  filter(year == 2070)
 
+covenanted_area_end_plot <- list(baseline = baseline_area_ts, robust = robust_area_ts, flexible = flexible_area_ts, flexible_learning = flexible_learning_area_ts) %>%
+  bind_rows(.id = 'model') %>%
+  pivot_wider(names_from = 'stat', values_from = 'area') %>%
+  mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) %>%
+  filter(year == 2070) %>%
+  mutate(name_num = as.numeric(as.factor(model))) %>%
+  ggplot(aes(x = name_num, y = median, fill = model)) +
+  #geom_hline(yintercept = 7000) +
+  geom_rect(aes(ymin = lb, ymax = ub, xmin = name_num - 0.4, xmax = name_num + 0.4))+
+  geom_point(data = offered_area_end, aes(y = area, x = name_num, color = model), size = 2, shape = 23) +
+  geom_text(aes(y = 5000, x = name_num, label = model, color = model), size = 4, vjust = 0) +
+  coord_cartesian(ylim = c(4000, 18000)) +
+  guides(color = 'none', fill = 'none') +
+  ggsci::scale_fill_nejm() +
+  ggsci::scale_color_nejm() +
+  theme_void() +
+  theme(axis.line.x = element_blank())
+covenanted_area_end_plot
 ## Cost plot ----------
 costs <- list(baseline = baseline_costs, robust = robust_costs, flexible = flexible_costs, flexible_learning = flexible_learning_costs)%>%
   lapply(function(x, interval = c(0.05, 0.95)) {
@@ -251,7 +272,7 @@ aus_plot <- ggplot() +
 aus_plot
 
 
-properties <- st_read("data/spatial_predictions_v1_1.gdb/", layer = "spatial_pred_inperp_v1_1")
+properties <- st_read("data/spatial_predictions_v1_1.gdb", layer = "spatial_pred_inperp_v1_1")
 prop_centroid <- properties %>%
   st_centroid() %>%
   select(NewPropID, MeanProp, UpperProp, Shape_Area) %>%
@@ -284,11 +305,11 @@ ggsave("plots/map_plot.png", maps_plot, width = 3000, height = 1300, units = 'px
 
 layout <- "
 ABB
-CD#
-CEF
+CDF
+CEG
 "
 
-plot1 <- wrap_elements(full=aus_plot) + wrap_elements(full=prop_decisions_plot) + cost_plot + covenanted_area_plot + year_trend_plot + end_range_plot + 
+plot1 <- wrap_elements(full=aus_plot) + wrap_elements(full=prop_decisions_plot) + cost_plot + covenanted_area_plot + year_trend_plot + covenanted_area_end_plot+ end_range_plot + 
   plot_layout(design = layout, heights = c(2,1,1.5), widths = c(1,1.2,0.4)) & plot_annotation(tag_levels = 'a') 
 ggsave("plots/plot1.png", plot1, width = 2800, height = 2300, units = 'px')
 
