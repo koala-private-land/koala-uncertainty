@@ -124,7 +124,7 @@ function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratifie
         CSV.write("$(out_dir)/metric_baseline_$(run_string).csv", metric_reshape(metric_nr))
         out_nr = Solution(true, solution_nr.model, solution_nr.x, solution_nr.y, solution_nr.w, cost_nr, metric_nr)
         decision_nr = fcn_tidy_two_stage_solution_sum(solution_nr, cost_subset.NewPropID)
-        CSV.write("$(out_dir)/decision_nr_$(run_string).csv", decision_nr)
+        CSV.write("$(out_dir)/decision_baseline_$(run_string).csv", decision_nr)
         @save "$(out_dir)/solution_baseline_$(run_string).jld" out_nr
         return out_nr
     end
@@ -178,7 +178,7 @@ function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratifie
     out_ar = Solution(true, solution_ar.model, solution_ar.x, solution_ar.y, solution_ar.w, cost_ar, metric_ar)
     out_tr = Solution(true, solution_tr.model, solution_tr.x, solution_tr.y, solution_tr.w, cost_tr, metric_tr)
     out_fr = Solution(true, solution_fr.model, solution_fr.x, solution_fr.y, solution_fr.w, cost_fr, metric_fr)
-    @save "$(out_dir)/solution_$(run_string).jld" out_nr out_ar out_tr out_fr
+    #@save "$(out_dir)/solution_$(run_string).jld" out_nr out_ar out_tr out_fr
 end
 
 ## Start sensitivity analysis
@@ -186,7 +186,7 @@ end
 # Sensitivity parameters (base)
 sp = 1; # 1:100
 sp_vec = 1:50
-tt = 5; # [0,1,2,3,4,5,6,7]
+tt = 6; # [0,1,2,3,4,5,6,7]
 tt_vec = 1:7
 kt = 0.25; # [0.1, 0.15, 0.2, 0.25, 0.3]
 kt_vec = [0.1, 0.15, 0.2, 0.25, 0.3]
@@ -195,8 +195,10 @@ ns_vec = 1:12
 
 baseline = fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns, true)
 
+robust = fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns, false)
+
 # Run across all ns, number of scenarios in resolved uncertainty
-map((ns_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns_i), ns_vec)
+map((ns_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns_i), [1,3,6,12])
 
 # Run across different time periods for tt
 map((tt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt_i, kt, ns), tt_vec)

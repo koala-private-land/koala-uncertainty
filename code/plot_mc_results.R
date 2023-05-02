@@ -9,7 +9,39 @@ library(sf)
 library(nngeo)
 
 results_dir <- "./results/mc_sim/"
-results_dir <- "~/Documents/OneDrive - The University of Queensland/Documents/GitHub/koala-uncertainty/results/mc_sim/"
+#results_dir <- "~/Documents/OneDrive - The University of Queensland/Documents/GitHub/koala-uncertainty/results/mc_sim/"
+
+
+flexibility_differences <- function(recourse = NULL, loop_vec = 1:10, params = c(sp, tt, kt, ns, rr), dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
+  base_string <- "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s"
+  cost_diff_pct <- lapply(loop_vec, function(x) {
+    vec_var <- params
+    vec_var[dep_var] <- x
+    run_string <- do.call(sprintf, c(fmt = base_string, as.list(vec_var)))
+    nr <- read_csv(paste0(results_dir, "cost_nr_", run_string, ".csv"), col_types = cols())
+    ar <- read_csv(paste0(results_dir, "cost_ar_", run_string, ".csv"), col_types = cols()) # recourse solution
+    tr <- read_csv(paste0(results_dir, "cost_tr_", run_string, ".csv"), col_types = cols()) # recourse solution
+    fr <- read_csv(paste0(results_dir, "cost_fr_", run_string, ".csv"), col_types = cols()) # recourse solution
+    diff <- list(ar = (ar - nr) / nr, tr = (tr - nr)/ nr, fr = (fr - nr)/nr)
+  })
+  names(cost_diff_pct) <- as.character(loop_vec)
+  summary_diff_pct <- map(cost_diff_pct, function(list_x) {
+    map(list_x, function(x) {
+      col = x
+      if (!is.null(realisation)) {
+        col = x[,realisation]
+      }
+      df <- data.frame(median = median(unlist(col)), lb = quantile(unlist(col), interval[1]), ub = quantile(unlist(col), interval[2]))
+      rownames(df) <- NULL
+      df
+    }) %>%
+      bind_rows(.id = "recourse")
+  }) %>%
+    bind_rows(.id = 'name')
+  
+  return(summary_diff_pct)
+}
+
 
 year_vec <- seq(2000, 2070, by=10)
 
@@ -316,36 +348,6 @@ ggsave("plots/plot1.png", plot1, width = 2800, height = 2300, units = 'px')
 
 ## Flexibility types plot --------
 
-flexibility_differences <- function(recourse = NULL, loop_vec = 1:10, params = c(sp, tt, kt, ns, rr), dep_var = 1, interval = c(0.05, 0.95), realisation = NULL) {
-  base_string <- "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s"
-  cost_diff_pct <- lapply(loop_vec, function(x) {
-    vec_var <- params
-    vec_var[dep_var] <- x
-    run_string <- do.call(sprintf, c(fmt = base_string, as.list(vec_var)))
-    nr <- read_csv(paste0(results_dir, "cost_nr_", run_string, ".csv"), col_types = cols())
-    ar <- read_csv(paste0(results_dir, "cost_ar_", run_string, ".csv"), col_types = cols()) # recourse solution
-    tr <- read_csv(paste0(results_dir, "cost_tr_", run_string, ".csv"), col_types = cols()) # recourse solution
-    fr <- read_csv(paste0(results_dir, "cost_fr_", run_string, ".csv"), col_types = cols()) # recourse solution
-    diff <- list(ar = (ar - nr) / nr, tr = (tr - nr)/ nr, fr = (fr - nr)/nr)
-  })
-  names(cost_diff_pct) <- as.character(loop_vec)
-  summary_diff_pct <- map(cost_diff_pct, function(list_x) {
-    map(list_x, function(x) {
-      col = x
-      if (!is.null(realisation)) {
-        col = x[,realisation]
-      }
-      df <- data.frame(median = median(unlist(col)), lb = quantile(unlist(col), interval[1]), ub = quantile(unlist(col), interval[2]))
-      rownames(df) <- NULL
-      df
-    }) %>%
-      bind_rows(.id = "recourse")
-  }) %>%
-    bind_rows(.id = 'name')
-  
-  return(summary_diff_pct)
-}
-
 flexibility_diff_ns <- flexibility_differences(loop_vec = c(1,3,12), dep_var = 4) 
 annotation1 <- c("No Learning", 1, -filter(flexibility_diff_ns, recourse == 'ar'& name == 12)$ub - 0.02, "V(F)")
 annotation2 <- c("Full Learning", 1, -filter(flexibility_diff_ns, recourse == 'ar'& name == 1)$ub - 0.02, "V(F+L)")
@@ -400,9 +402,10 @@ plot_shaded_diff <- function(summary_diff_pct) {
     ggpubr::theme_pubr()
 }
 
-flexibility_differences(loop_vec = 1:10, dep_var = 1) %>% plot_shaded_diff()
-flexibility_differences(loop_vec = c(2,3,4,5,6,7), dep_var = 2, realisation = 1:10)%>% plot_shaded_diff()
-flexibility_differences(loop_vec = c(0.1, 0.15, 0.2, 0.25), dep_var = 3, realisation = 1:10)%>% plot_shaded_diff()
-flexibility_differences(loop_vec = 1:12, dep_var = 4, realisation = 1:10, interval = c(0.05, 0.95)) %>% plot_shaded_diff()
-+
-  scale_x_continuous("Number of climate scenarios")
+default <- c(1,5,0.25,12,10)
+flexibility_differences(params = default, loop_vec = 1:10, dep_var = 1) %>% plot_shaded_diff()
+flexibility_differences(params = default, loop_vec = c(2,3,4,5 6,7), dep_var = 2, realisation = 1:10)%>% plot_shaded_diff()
+flexibility_differences(params = default, loop_vec = c(0.1, 0.15, 0.2, 0.25), dep_var = 3, realisation = 1:10)%>% plot_shaded_diff()
+flexibility_differences(params = default, loop_vec = 1:12, dep_var = 4, realisation = 1:10, interval = c(0.05, 0.95)) %>% plot_shaded_diff() +
+  scale_x_reverse("Learning (number of climate scenarios)") +
+  scale_y_reverse("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(-1, 0.1))
