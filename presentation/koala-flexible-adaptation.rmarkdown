@@ -1,0 +1,135 @@
+---
+title: "Flexible koala conservation on private land under climate change"
+author: "Frankie Cho"
+format: 
+  revealjs:
+    theme: default
+editor: visual
+institute: University of Queensland
+title-slide-attributes: 
+  data-background-image: /assets/partner_logos.png
+  data-background-size: 100%
+  data-background-position: 2% 98%
+smaller: true
+---
+
+
+## Flexible adaptation
+
+::: columns
+::: {.column width="60%"}
+
+```{r}
+library(ggplot2)
+library(patchwork)
+library(sf)
+library(geodata)
+plot_list <- readRDS('../plots/plot_list.rds')
+
+```
+
+::: incremental
+-   Koalas declared endangered in NSW, QLD and ACT
+
+-   Climate change threatens koala habitat
+
+-   NSW Koala Strategy: 7,000ha koala habitat to be protected on NSW private land by 2025
+:::
+
+:::
+
+::: {.column width="40%"}
+![](assets/IMG_0401.JPG){fig-align="center" width="100%"}
+:::
+
+
+
+:::
+
+## 7,000ha koala habitat on private land
+
+::: r-stack
+
+```{r dpi=300}
+#| classes: .fragment .current-visible
+#| fig-cap: "CC: Enough protection under current conditions"
+#| fig-cap-location: top
+
+
+fcn_generate_plot <- function(i, plot_list) {
+  layout <- "
+  BBDDD
+  CCDDD
+  CCDDD"
+  plot_list[[i]]$covenanted_area_plot + plot_list[[i]]$year_trend_plot + plot_list[[i]]$prop_decisions_plot + plot_layout(design = layout)
+} 
+fcn_generate_plot(1, plot_list)
+```
+
+```{r dpi=300}
+#| classes: .fragment .current-visible
+#| fig-cap: "RI: Robust but inflexible protection"
+#| fig-cap-location: top
+fcn_generate_plot(2, plot_list)
+```
+
+```{r dpi=300}
+#| classes: .fragment .current-visible
+#| fig-cap: "F: Flexible protection -- add new covenants in 2050"
+#| fig-cap-location: top
+fcn_generate_plot(3, plot_list)
+```
+
+```{r dpi=300}
+#| classes: .fragment .current-visible
+#| fig-cap: "F+L: Flexible protection + learning climate change uncertainty in 2050"
+#| fig-cap-location: top
+fcn_generate_plot(4, plot_list)
+```
+
+:::
+
+## Flexible adaptation 50% more cost-effective
+
+::: columns
+::: r-stack
+
+```{r dpi=300}
+#| classes: .fragment .current-visible
+#| fig-cap: "CC: $51M ($44-61M)"
+#| fig-cap-location: top
+plot_list[[1]]$cost_plot
+```
+
+```{r dpi=300}
+#| classes: .fragment .current-visible
+#| fig-cap: "RI: $108M ($101-117M)"
+#| fig-cap-location: top
+plot_list[[2]]$cost_plot
+```
+
+```{r dpi=300}
+#| classes: .fragment .current-visible
+#| fig-cap: "F: $72M ($63-81M) -- 37% cost reduction"
+#| fig-cap-location: top
+plot_list[[3]]$cost_plot
+```
+
+```{r dpi=300}
+#| classes: .fragment .current-visible
+#| fig-cap: "Flexible + Learning: $59M ($48-74M) -- 49% cost reduction"
+#| fig-cap-location: top
+plot_list[[4]]$cost_plot
+```
+
+:::
+:::
+
+## Key findings
+::: incremental
+-   Strategic flexibility alters first-stage decisions
+
+-   Flexibility mitigates trade-offs between maximizing conservation outcomes and managing risks
+
+-   Flexibility to offer new covenants much more valuable than flexibility to end interventions
+:::

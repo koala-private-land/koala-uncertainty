@@ -114,7 +114,8 @@ for (i in 1:length(scen_list)) {
     lapply(summary_stat) %>%
     bind_rows(.id = 'model') %>%
     mutate(year = year_vec[t]) %>%
-    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) 
+    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) %>%
+    filter(model %in% scen_list_i)
   
   year_trend_plot <- baseline_robust_df %>%
     filter(year >= 2020) %>%
@@ -222,7 +223,8 @@ for (i in 1:length(scen_list)) {
                        flexible = flexible_offered_area, flexible_learning = flexible_learning_offered_area) %>%
     bind_rows(.id = 'model') %>%
     mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) %>%
-    filter(year >= 2020)
+    filter(year >= 2020) %>%
+    filter(model %in% scen_list_i)
   
   covenanted_area_plot <- list(baseline = baseline_area_ts, robust = robust_area_ts, flexible = flexible_area_ts, flexible_learning = flexible_learning_area_ts) %>%
     bind_rows(.id = 'model') %>%
@@ -236,7 +238,6 @@ for (i in 1:length(scen_list)) {
     geom_ribbon(aes(fill = model, ymin = lb, ymax = ub), alpha = 0.25) +
     geom_line(data = offered_area, aes(color = model, y = area), linewidth = 1) +
     #geom_line(aes(color = model, y = median)) +
-    
     scale_y_continuous("Covenant offers/ \nyield (ha)") +
     scale_x_continuous("Year") +
     ggsci::scale_color_nejm() +
@@ -290,20 +291,31 @@ for (i in 1:length(scen_list)) {
   
   cost_df <- costs %>%
     mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) %>%
-    mutate(name_num = as.numeric(model))
+    mutate(name_num = as.numeric(model)) %>%
+    filter(model %in% scen_list_i)
   
   cost_plot <- cost_df %>%
     ggplot(aes(x = name_num)) +
     #geom_vline(xintercept = median(unlist(flexible_costs)), linetype = 2) +
     #geom_vline(xintercept = median(unlist(flexible_learning_costs)), linetype = 2) +
-    geom_segment(aes(y = lb, yend = ub, x = name_num, xend = name_num, color = model), linewidth = 1) +
-    annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(robust_costs)), x = 2, xend = 6.5, color = 'gray20', linetype = 1) +
-    annotate('segment', y = median(unlist(flexible_costs)), yend = median(unlist(flexible_costs)),  x= 3, xend = 6.5, color = 'gray20', linetype = 2) +
-    annotate('segment', y = median(unlist(flexible_learning_costs)), yend = median(unlist(flexible_learning_costs)), x= 4, xend = 6.5, color = 'gray20', linetype = 2) +
-    annotate('text', y = mean(c(median(unlist(flexible_costs)),median(unlist(robust_costs)))), x = 5.5, label = "V(F)", hjust = 1) +
-    annotate('text', y = mean(c(median(unlist(flexible_costs)),median(unlist(flexible_learning_costs)))), x = 5.9, label = "V(F+L)", hjust = 1) +
-    annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(flexible_costs)), x = 5.6, xend = 5.6, arrow = arrow(length = unit(0.2, "cm"))) +
-    annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(flexible_learning_costs)), x = 6, xend = 6, arrow = arrow(length = unit(0.2, "cm"))) +
+    geom_segment(aes(y = lb, yend = ub, x = name_num, xend = name_num, color = model), linewidth = 1) 
+  
+  if ('F' %in% scen_list_i) {
+    cost_plot <- cost_plot +
+      annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(robust_costs)), x = 2, xend = 6.5, color = 'gray20', linetype = 1) +
+      annotate('segment', y = median(unlist(flexible_costs)), yend = median(unlist(flexible_costs)),  x= 3, xend = 6.5, color = 'gray20', linetype = 2) +
+      annotate('text', y = mean(c(median(unlist(flexible_costs)),median(unlist(robust_costs)))), x = 5.5, label = "V(F)", hjust = 1) +
+      annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(flexible_costs)), x = 5.6, xend = 5.6, arrow = arrow(length = unit(0.2, "cm")))
+  }
+  
+  if ('F+L' %in% scen_list_i) {
+    cost_plot <- cost_plot +
+      annotate('segment', y = median(unlist(flexible_learning_costs)), yend = median(unlist(flexible_learning_costs)), x= 4, xend = 6.5, color = 'gray20', linetype = 2) +
+      annotate('text', y = mean(c(median(unlist(flexible_costs)),median(unlist(flexible_learning_costs)))), x = 5.9, label = "V(F+L)", hjust = 1) +
+      annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(flexible_learning_costs)), x = 6, xend = 6, arrow = arrow(length = unit(0.2, "cm")))
+  }
+  
+  cost_plot <- cost_plot +
     geom_hline(yintercept = 0) +
     geom_point(aes(y = median, color = model), size = 3) +
     ggsci::scale_color_nejm()+
@@ -319,7 +331,7 @@ for (i in 1:length(scen_list)) {
   
   decisions <- list(baseline = baseline_decisions, robust = robust_decisions, flexible = flexible_decisions, flexible_learning = flexible_learning_decisions) %>%
     bind_rows(.id = 'model')
-  prop_decisions_plot <- prop_df %>%
+  prop_decisions <- prop_df %>%
     right_join(decisions) %>%
     pivot_longer(c('x','y'), names_to = 'stage', values_to = 'decision') %>%
     mutate(area = ifelse(stage == 'y' & model == 'flexible_learning', UpperProp * AREA,UpperProp * AREA * decision)) %>%
@@ -327,15 +339,16 @@ for (i in 1:length(scen_list)) {
     mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) %>%
     filter(decision > 0) %>%
     mutate(stage = factor(stage, c('x','y'), c('Stage 1', 'Stage 2'))) %>%
-    filter(model %in% scen_list_i) %>%
+    filter(model %in% scen_list_i)
+  prop_decisions_plot <- prop_decisions %>%
     ggplot() +
     geom_sf(data = st_transform(nsw_lga_union, st_crs(prop_centroid))) +
     geom_point(aes(x = X, y = Y, size = area, fill = model, alpha = probability), color = 'white', pch = 21) +
     ggsci::scale_fill_nejm() +
+    scale_alpha_continuous(range = c(ifelse(min(prop_decisions$probability) > 0.99, 1, 0),1))+
     facet_grid(stage~model, switch = 'y') +
     guides(size = 'none', alpha = 'none', fill = 'none') +
     theme_void()
-  prop_decisions_plot
   
   maps_plot <-  aus_plot + prop_decisions_plot + plot_layout(widths = c(1,2))
   #ggsave("plots/map_plot.png", maps_plot, width = 3000, height = 1300, units = 'px')
@@ -399,7 +412,7 @@ for (i in 1:length(scen_list)) {
 }
 
 # Save plots ------
-
+saveRDS(plot_list, file = "plots/plot_list.rds")
 ggsave("plots/plot1.png", plot_list[[4]]$plot1, width = 2800, height = 2300, units = 'px')
 ggsave("plots/plot2.png", plot_list[[4]]$ns_plot, width = 2000, height = 800, units = 'px')
 

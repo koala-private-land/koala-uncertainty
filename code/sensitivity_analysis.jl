@@ -128,6 +128,11 @@ function fcn_run_optim(cost_df::DataFrame, kitl_index_full::DataFrame, stratifie
         @save "$(out_dir)/solution_baseline_$(run_string).jld" out_nr
         return out_nr
     end
+
+    if (isfile("$(out_dir)/decision_fr_$(run_string).jld"))
+        return
+    end
+
     if (worst_case_khab < K)
         println("Constraint infeasible for this scenario")
         return
@@ -187,9 +192,9 @@ end
 sp = 1; # 1:100
 sp_vec = 1:50
 tt = 6; # [0,1,2,3,4,5,6,7]
-tt_vec = 1:7
+tt_vec = 3:6
 kt = 0.25; # [0.1, 0.15, 0.2, 0.25, 0.3]
-kt_vec = [0.1, 0.15, 0.2, 0.25, 0.3]
+kt_vec = [0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3]
 ns = 12; # 1:12
 ns_vec = 1:12
 
@@ -198,13 +203,16 @@ baseline = fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/
 robust = fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns, false)
 
 # Run across all ns, number of scenarios in resolved uncertainty
-map((ns_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns_i), [1,3,6,12])
+map((ns_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns_i), ns_vec)
 
 # Run across different time periods for tt
+map((tt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt_i, kt, 1), tt_vec)
 map((tt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt_i, kt, ns), tt_vec)
 
 # Run across all kt
+map((kt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt_i, 1), kt_vec)
 map((kt_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt_i, ns), kt_vec)
 
 # Run across different sampled properties
+map((sp_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp_i, tt, kt, 1), sp_vec)
 map((sp_i) -> fcn_run_optim(cost_df, kitl_index_full, stratified_samples, "results/mc_sim", sp_i, tt, kt, ns), sp_vec)
