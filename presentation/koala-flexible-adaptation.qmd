@@ -1,0 +1,23 @@
+---
+title: "Flexible koala conservation under climate change"
+author: "Frankie Cho"
+format: 
+  revealjs:
+    theme: default
+editor: visual
+title-slide-attributes:
+    data-background-image: "/presentations/assets/IMG_0401.JPG"
+    data-background-size: contain
+    data-background-opacity: "number"
+---
+
+
+## Flexible adaptation
+
+-   Koalas declared endangered in NSW, QLD and ACT
+-   Climate change threatens koala habitat
+-   NSW Koala Strategy: 7,000ha koala habitat to be protected on NSW private land by 2025
+
+## Protecting under current climate insufficient under climate change
+```
+```
