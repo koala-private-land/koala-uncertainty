@@ -8,8 +8,15 @@ library(geodata)
 library(sf)
 library(nngeo)
 
-results_dir <- "./results/mc_sim/"
+results_dir <- "results/mc_sim/"
 #results_dir <- "~/Documents/OneDrive - The University of Queensland/Documents/GitHub/koala-uncertainty/results/mc_sim/"
+
+# Default parameters
+sp = 1 #1:10
+tt = 5 # [0,1,2,3,4,5,6,7]
+kt = 0.25 # [0.1, 0.15, 0.2, 0.25, 0.3]
+ns = 12 # 1:12
+rr = 10
 
 flexibility_differences <- function(recourse = NULL, loop_vec = 1:10, params = c(sp, tt, kt, ns, rr), dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
   base_string <- "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s"
@@ -67,6 +74,8 @@ nsw_bbox <- st_bbox(nsw_lga_union)
 bbox_buffer <- 1
 aus_xlim <- c(113.338953078, 153.569469029)
 aus_ylim <- c(-43.6345972634,-10.6681857235)
+saveRDS(list(aus_border=aus_border, nsw_bbox=nsw_bbox, nsw_lga_union=nsw_lga_union), file = 'plots/shapes.rds')
+
 aus_plot <- ggplot() +
   geom_sf(data = aus_border, fill = 'gray80', color = 'white') +
   geom_rect(aes(xmin = nsw_bbox$xmin - bbox_buffer, xmax = nsw_bbox$xmax + bbox_buffer, ymin = nsw_bbox$ymin - bbox_buffer, ymax = nsw_bbox$ymax + bbox_buffer), fill = NA, color = 'gray50') +
@@ -77,12 +86,7 @@ aus_plot <- ggplot() +
 #theme(axis.title = element_blank(), axis.text = element_blank(), axis.ticks = element_blank(),
 #      panel.background = element_rect(fill = 'aliceblue'))
 
-# Default parameters
-sp = 1 #1:10
-tt = 6 # [0,1,2,3,4,5,6,7]
-kt = 0.25 # [0.1, 0.15, 0.2, 0.25, 0.3]
-ns = 12 # 1:12
-rr = 10
+
 
 scen_list <- c('CC', 'RI', 'F', 'F+L')
 plot_list <- list()
@@ -362,23 +366,42 @@ for (i in 1:length(scen_list)) {
   plot1 <- wrap_elements(full=aus_plot) + wrap_elements(full=prop_decisions_plot) + cost_plot + covenanted_area_plot + year_trend_plot + covenanted_area_end_plot+ end_range_plot + 
     plot_layout(design = layout, heights = c(2,1,1.5), widths = c(1,1.2,0.4)) & plot_annotation(tag_levels = 'a') 
 
-  ## Flexibility types plot --------
   
-  flexibility_diff_ns <- flexibility_differences(loop_vec = c(1,3,12), dep_var = 4) 
-  annotation1 <- c("No Learning", 1, -filter(flexibility_diff_ns, recourse == 'ar'& name == 12)$ub - 0.02, "V(F)")
-  annotation2 <- c("Full Learning", 1, -filter(flexibility_diff_ns, recourse == 'ar'& name == 1)$ub - 0.02, "V(F+L)")
-  annotations <- as.data.frame(rbind(annotation1, annotation2))
-  names(annotations) <- c('name', 'model', 'y', 'label')
-  annotations$model <- as.numeric(annotations$model)
-  annotations$y <- as.numeric(annotations$y)
-  annotations$name <- factor(annotations$name, c('No Learning', 'Partial Learning', 'Full Learning'), c('No Learning', 'Partial Learning', 'Full Learning'))
   
-  bar_width = 0.2
+  # Save plots to list
+  plot_list[[i]] <- list(
+    aus_plot = aus_plot,
+    prop_decisions_plot = prop_decisions_plot,
+    cost_plot = cost_plot,
+    year_trend_plot = year_trend_plot,
+    covenanted_area_plot = covenanted_area_plot,
+    covenanted_area_end_plot = covenanted_area_end_plot,
+    end_range_plot = end_range_plot,
+    plot1 = plot1
+  )
+}
+
+
+## Flexibility types plot --------
+recourse_types <- c('(A)', '(E)', '(A/E)')
+flexibility_diff_ns <- flexibility_differences(loop_vec = c(1,3,12), dep_var = 4) 
+annotation1 <- c("No Learning", 1, -filter(flexibility_diff_ns, recourse == 'ar'& name == 12)$ub - 0.02, "V(F)")
+annotation2 <- c("Full Learning", 1, -filter(flexibility_diff_ns, recourse == 'ar'& name == 1)$ub - 0.02, "V(F+L)")
+annotations <- as.data.frame(rbind(annotation1, annotation2))
+names(annotations) <- c('name', 'model', 'y', 'label')
+annotations$model <- as.numeric(annotations$model)
+annotations$y <- as.numeric(annotations$y)
+annotations$name <- factor(annotations$name, c('No Learning', 'Partial Learning', 'Full Learning'), c('No Learning', 'Partial Learning', 'Full Learning'))
+
+bar_width = 0.2
+plot_list_ns <- list()
+for (i in 1:length(recourse_types)) {
   ns_plot <- flexibility_diff_ns %>%
     mutate(median = -median, lb = -lb, ub = -ub) %>% # Plot change in positive axis
     mutate(recourse = factor(recourse, c('ar', 'tr', 'fr'), c('(A)', '(E)', '(A/E)'))) %>%
     mutate(name = factor(name, c(12, 3, 1), c('No Learning', 'Partial Learning', 'Full Learning'))) %>%
     mutate(model = as.numeric(recourse)) %>%
+    filter(recourse %in% recourse_types[1:i]) %>%
     ggplot(aes( x = model)) +
     geom_hline(yintercept =  0, color = 'gray70') +
     geom_segment(aes(color = recourse, y = median, yend = median, x = model - bar_width, xend = model + bar_width), linewidth = 1) +
@@ -391,30 +414,21 @@ for (i in 1:length(scen_list)) {
     ggpubr::theme_pubr() +
     guides(color = 'none', fill = 'none') +
     scale_y_continuous("Cost reduction \n(relative to Robust)", labels = scales::unit_format(scale = 100,unit = "%")) +
+    coord_cartesian(xlim = c(.8,3.2)) +
     theme(axis.title.x = element_blank(),
           axis.line = element_blank(),
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank(),
           panel.border = element_rect(fill = NA, linewidth = 1))
   
-  # Save plots to list
-  plot_list[[i]] <- list(
-    aus_plot = aus_plot,
-    prop_decisions_plot = prop_decisions_plot,
-    cost_plot = cost_plot,
-    year_trend_plot = year_trend_plot,
-    covenanted_area_plot = covenanted_area_plot,
-    covenanted_area_end_plot = covenanted_area_end_plot,
-    end_range_plot = end_range_plot, 
-    ns_plot = ns_plot,
-    plot1 = plot1
-  )
+  plot_list_ns[[i]] <- ns_plot
 }
 
 # Save plots ------
 saveRDS(plot_list, file = "plots/plot_list.rds")
+saveRDS(plot_list_ns, file = "plots/plot_list_ns.rds")
 ggsave("plots/plot1.png", plot_list[[4]]$plot1, width = 2800, height = 2300, units = 'px')
-ggsave("plots/plot2.png", plot_list[[4]]$ns_plot, width = 2000, height = 800, units = 'px')
+ggsave("plots/plot2.png", plot_list_ns[[3]], width = 2000, height = 800, units = 'px')
 
 library(gganimate)
 year_trend_anim <- year_trend_plot +
@@ -439,8 +453,10 @@ plot_shaded_diff <- function(summary_diff_pct) {
 }
 
 default <- c(1,5,0.25,12,10)
-flexibility_differences(params = default, loop_vec = 1:10, dep_var = 1) %>% plot_shaded_diff()
-flexibility_differences(params = default, loop_vec = c(2,3,4,5, 6,7), dep_var = 2, realisation = 1:10)%>% plot_shaded_diff()
+flexibility_differences(params = default, loop_vec = 1:10, dep_var = 1) %>% 
+  plot_shaded_diff()
+flexibility_differences(params = default, loop_vec = c(2,3,4,5,6,7), dep_var = 2, realisation = 1:10) %>% 
+  plot_shaded_diff()
 flexibility_differences(params = default, loop_vec = c(0.1, 0.15, 0.2, 0.25), dep_var = 3, realisation = 1:10)%>% plot_shaded_diff()
 flexibility_differences(params = default, loop_vec = 1:12, dep_var = 4, realisation = 1:10, interval = c(0.05, 0.95)) %>% plot_shaded_diff() +
   scale_x_reverse("Learning (number of climate scenarios)") +
