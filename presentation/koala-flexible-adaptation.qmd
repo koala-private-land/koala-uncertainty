@@ -163,3 +163,44 @@ plot_list_ns[[3]]
 ::: fragment
 ![](assets/partner_logos_wide.png){width="100%"}
 :::
+
+## Appendix 1: Sensitivity analysis
+
+![Sensitivities of estimates of the value of flexibility (A, E and A/E) under changes to the default parameters, showing sensitivities to a, sampling of 10 study populations randomly sampled with the stratified sampling approach (default index = 1), b, year covenant modification is allowed - t' (default = 2050). c, koala landscape capacity indicator cut-off (default = 0.25) across a range of cut-offs where feasible solutions to the problem are found, and d. Amount of learning based on the number of climate scenarios decision-makers are uncertain about (1 being perfect certainty over climate change, default = 12), with "No Learning", "Partial Learning" and "Full Learning" having parameters of 12, 3 and 1 respectively.](sensitivity_plots.png)
+
+## Appendix 2: Two-stage stochastic optimization
+
+$$
+\min_x E_{j \in J}\Big[\sum_i \sum_t c_{ijt}x_i + E_{S\in\xi}[Q(x,S)]\Big] \\
+Q_j(x,S) := \min_{y,w} E_{s\in S}\Big[\sum_i \sum_{t\geq t'} c_{ijt}y_{is} - c_{ijt}w_{is}\Big] \\
+s.t. \sum_i m_{ijts} x_i \geq K \quad \forall t=1,s\in S, j \in J \\
+\sum_i m_{ijts}(x_i + y_{is} - w_{is} \geq K \quad \forall t \geq t', s \in S, j \in J \\
+\sum_i m_{ijts} x_i \geq K \quad \forall t = 1, s \in S, j \in J \\
+x_i + y_{is} \leq 1 \quad \forall i \in N, s \in S \\
+x_i \geq w_{is} \quad \forall i \in N, s \in S \\
+y_{is} = 0 \quad \forall i \in N, s \in S \\
+w_{is} = 0 \quad \forall i \in N, s \in S \\
+x,y,w \in [0,1]
+$$
+
+## Appendix 3
+
+### Conservation under Current Conditions (CC)
+
+-   Total habitat reaches 7,000 ha in 2020 on average
+
+### Robust and Inflexible (RI)
+
+-   Total habitat is higher than 7,000 for all time-steps, all climate scenarios and all social behavior realizations
+-   Covenant offers same across time
+
+### Flexible (F)
+
+-   Total habitat is higher than 7,000 for all time-steps, all climate scenarios and all social behavior realizations
+-   New covenant offers can be added in 2050
+
+### Flexible with Learning (F+L)
+
+-   Total habitat is higher than 7,000 for time-steps before 2050, all climate scenarios and all social behavior realizations
+-   After 2050, total habitat must be higher than 7,000 for a particular climate scenario (offers can be different across scenarios) on the average social behavior realization
+-   New covenant offers can be added in 2050
