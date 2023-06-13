@@ -41,7 +41,7 @@ mutable struct Solution
 end
 
 function cost_to_ts(cost::AbstractVector, area::AbstractVector, adopt::AbstractVector, idx_before::AbstractVector=1:30, idx_after::AbstractVector=31:60, inflation_rate::AbstractFloat=0.02)
-    delta = (1 + inflation_rate) .^ (cat(idx_before, idx_after, dims=1))
+    delta = (1 + inflation_rate) .^ (cat(idx_before, idx_after, dims=1)) # Negative inflation rate is equivalent to discount rate
     delta_before = sum(delta[idx_before])
     delta_after = sum(delta[idx_after])
     cost_ts = (cost .* 1000 .* area .* adopt ./ 10) # Cost per-year
