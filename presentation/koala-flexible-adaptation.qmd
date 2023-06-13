@@ -28,7 +28,7 @@ fontsize: "2em"
 
 ::: columns
 ::: {.column width="50%"}
-```{r fig.height=10, fig.width=10}
+```{r}
 library(ggplot2)
 library(patchwork)
 library(sf)
@@ -44,8 +44,8 @@ wrap_elements(full=plot_list[[1]]$aus_plot)
 ```
 :::
 
-::: {.column width="50%"}
-![](assets/IMG_0401.JPG){border-radius="50%" overflow="hidden" fig-align="center" width="100%"}
+::: {.column width="50%" height="300px"}
+![](assets/IMG_0401.JPG){border-radius="50%" overflow="hidden" fig-align="center" height="300px"}
 :::
 :::
 
