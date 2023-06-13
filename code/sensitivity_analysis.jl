@@ -25,12 +25,12 @@ kitl_index_full = CSV.read("data/kitl_prop_climate.csv", DataFrame);
 stratified_samples = CSV.read("data/stratified_sample.csv", DataFrame);
 climateProjList = ["CCCMA_R1", "CCCMA_R2", "CCCMA_R3", "CSIRO_R1", "CSIRO_R2", "CSIRO_R3", "ECHAM_R1", "ECHAM_R2", "ECHAM_R3", "MIROC_R1", "MIROC_R2", "MIROC_R3"];
 discount_rate = 0.02;
-model_matrix_x = [convert(Matrix{Float64}, CSV.read("data/model_matrix/Model_MatrixX.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
-model_matrix_y = [convert(Matrix{Float64}, CSV.read("data/model_matrix/Model_MatrixY.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
-model_matrix_z = [convert(Matrix{Float64}, CSV.read("data/model_matrix/Model_MatrixZ.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
-coefs_x = [convert(Matrix{Float64}, CSV.read("data/model_matrix/CoefsX.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
-coefs_y = [convert(Matrix{Float64}, CSV.read("data/model_matrix/CoefsY.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
-coefs_z = [convert(Matrix{Float64}, CSV.read("data/model_matrix/CoefsZ.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
+model_matrix_x = [Matrix(CSV.read("data/model_matrix/Model_MatrixX.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
+model_matrix_y = [Matrix(CSV.read("data/model_matrix/Model_MatrixY.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
+model_matrix_z = [Matrix(CSV.read("data/model_matrix/Model_MatrixZ.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
+coefs_x = [Matrix(CSV.read("data/model_matrix/CoefsX.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
+coefs_y = [Matrix(CSV.read("data/model_matrix/CoefsY.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
+coefs_z = [Matrix(CSV.read("data/model_matrix/CoefsZ.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
 
 # Constants
 R = 100; # Total number of uncertainty realisations
@@ -111,9 +111,9 @@ end
 
 # Realisation from MCMC sampling draws, with cost_subset constructed from fcn_get_predictions
 function fcn_realisation_sample_draws(cost_subset::DataFrame, kitl_subset::DataFrame, tt::Integer=4, kt::AbstractFloat=0.25)
-    (M₁, M₂) = metric_to_input(kitl_subset, area, tt, kt)
-    adopt_binary = adopt .< rand(length(cost_subset.Adopt))
-    prop_binary = prop .* adopt_binary
+    (M₁, M₂) = metric_to_input(kitl_subset, cost_subset.AREA, tt, kt)
+    adopt_binary = cost_subset.Adopt .< rand(length(cost_subset.Adopt))
+    prop_binary = cost_subset.Prop .* adopt_binary
     (C₁, C₂) = cost_to_ts(cost_subset.WTA, cost_subset.AREA, prop_binary, 1:(10*(tt-1)), (1+10*(tt-1)):60, -discount_rate)
     sample_C₁ = C₁ .* prop_binary
     sample_C₂ = C₂ .* prop_binary
@@ -142,11 +142,11 @@ function fcn_get_predictions()
     pred_z = model_matrix_z_idx * coefs_z_idx
 
     # Logit transform adopt and prop 
-    pred_x = exp(pred_x) ./ (1 + exp(pred_x))
-    pred_z = exp(pred_z) ./ (1 + exp(pred_z))
+    pred_x = exp.(pred_x) ./ (1 .+ exp.(pred_x))
+    pred_z = exp.(pred_z) ./ (1 .+ exp.(pred_z))
 
     # Collate into DataFrame
-    df = DataFrame(WTA = pred_y, Prop = pred_z, Adopt = pred_x, AREA = cost_df.AREA)
+    df = DataFrame(NewPropID = cost_df.NewPropID, WTA = pred_y, Prop = pred_z, Adopt = pred_x, AREA = cost_df.AREA)
 
     # Output predictions in a dataframe
     return df
@@ -155,7 +155,7 @@ end
 function fcn_subset_realisation_sample_draw(kitl_index_full::DataFrame, subset_id::AbstractVector, tt::Integer=4, kt::AbstractFloat=0.25)
     cost_df = fcn_get_predictions();
     (cost_subset, kitl_subset) = subset_data(cost_df, kitl_index_full, subset_id)
-    realisation = realisation_sample(cost_subset, kitl_subset, tt, kt)
+    realisation = fcn_realisation_sample_draws(cost_subset, kitl_subset, tt, kt)
     return realisation;
 end
 
