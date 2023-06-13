@@ -1,20 +1,8 @@
-<<<<<<< HEAD
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
-/data
-.vscode/settings.json
-=======
+
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
 /data
 .RDataTmp
-<<<<<<< HEAD
-
-results/mc_sim/
-=======
->>>>>>> 7a1f1232b5b9a349b963e983f9aef766488e0446
->>>>>>> main
+results/

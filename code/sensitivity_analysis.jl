@@ -20,6 +20,7 @@ Random.seed!(54815861)
 
 include("optim-functions.jl")
 
+
 cost_df = CSV.read("data/spatial_predictions_10yr.csv", DataFrame);
 kitl_index_full = CSV.read("data/kitl_prop_climate.csv", DataFrame);
 stratified_samples = CSV.read("data/stratified_sample.csv", DataFrame);
@@ -59,12 +60,19 @@ function cost_to_ts(cost::AbstractVector, area::AbstractVector, prop::AbstractVe
 end
 
 # Subset data
+function subset_propid(df, subset_id)
+    return df[findall(in(subset_id),df.NewPropID),:]
+end
 function subset_data(cost_full, kitl_index_full, subset_id::Vector{Int64})
-    cost_subset = filter(row -> row.NewPropID ∈ subset_id, cost_full)
-    kitl_subset = filter(row -> row.NewPropID ∈ subset_id, kitl_index_full)
-    filter!(row -> row.NewPropID ∈ kitl_subset.NewPropID, cost_subset)
-    filter!(row -> row.NewPropID ∈ cost_subset.NewPropID, kitl_subset)
+    cost_subset = subset_propid(cost_full, subset_id)
+    kitl_subset = subset_propid(kitl_index_full, subset_id)
+    cost_subset = subset_propid(cost_subset, kitl_subset.NewPropID)
+    kitl_subset = subset_propid(kitl_subset, cost_subset.NewPropID)
     return (cost_subset, kitl_subset)
+end
+
+function get_propid(subset_id::Vector{Int64})
+    return subset_data(cost_df, kitl_index_full, subset_id)
 end
 
 # Metrics to input
@@ -147,7 +155,6 @@ function fcn_get_predictions()
 
     # Collate into DataFrame
     df = DataFrame(NewPropID = cost_df.NewPropID, WTA = pred_y, Prop = pred_z, Adopt = pred_x, AREA = cost_df.AREA)
-
     # Output predictions in a dataframe
     return df
 end
@@ -171,6 +178,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     run_string = "run_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)_r-$(rr)"
     subset_id = vec(stratified_samples[:, sp])
     realisations = [fcn_subset_realisation_sample_draw(kitl_index_full, subset_id, tt, kt) for r in 1:R]
+    out_propid = get_propid(subset_id);
     realisation_areas = hcat([realisations[r].area for r in 1:R]...)
     realisation_areas_df = DataFrame(realisation_areas, :auto)
     CSV.write("$(out_dir)/area_$(run_string).csv", realisation_areas_df)
@@ -183,9 +191,9 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
         CSV.write("$(out_dir)/cost_baseline_$(run_string).csv", DataFrame(cost_nr, :auto))
         CSV.write("$(out_dir)/metric_baseline_$(run_string).csv", metric_reshape(metric_nr))
         out_nr = Solution(true, solution_nr.model, solution_nr.x, solution_nr.y, solution_nr.w, cost_nr, metric_nr)
-        decision_nr = fcn_tidy_two_stage_solution_sum(solution_nr, cost_subset.NewPropID)
+        decision_nr = fcn_tidy_two_stage_solution_sum(solution_nr, out_propid)
         CSV.write("$(out_dir)/decision_baseline_$(run_string).csv", decision_nr)
-        @save "$(out_dir)/solution_baseline_$(run_string).jld" out_nr
+        #@save "$(out_dir)/solution_baseline_$(run_string).jld" out_nr
         return out_nr
     end
 
@@ -208,10 +216,10 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     (cost_tr, metric_tr) = fcn_evaluate_solution(solution_tr.model, realisations)
     (cost_fr, metric_fr) = fcn_evaluate_solution(solution_fr.model, realisations)
 
-    decision_nr = fcn_tidy_two_stage_solution_sum(solution_nr, cost_subset.NewPropID)
-    decision_ar = fcn_tidy_two_stage_solution_sum(solution_ar, cost_subset.NewPropID)
-    decision_tr = fcn_tidy_two_stage_solution_sum(solution_tr, cost_subset.NewPropID)
-    decision_fr = fcn_tidy_two_stage_solution_sum(solution_fr, cost_subset.NewPropID)
+    decision_nr = fcn_tidy_two_stage_solution_sum(solution_nr, out_propid)
+    decision_ar = fcn_tidy_two_stage_solution_sum(solution_ar, out_propid)
+    decision_tr = fcn_tidy_two_stage_solution_sum(solution_tr, out_propid)
+    decision_fr = fcn_tidy_two_stage_solution_sum(solution_fr, out_propid)
 
     median_ar = median((cost_ar .- cost_nr) ./ cost_nr)
     lb_ar = quantile(vec((cost_ar .- cost_nr) ./ cost_nr), 0.025)
@@ -257,22 +265,25 @@ kt = 0.25; # [0.1, 0.15, 0.2, 0.25, 0.3]
 kt_vec = [0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3]
 ns = 12; # 1:12
 ns_vec = 1:12
+dir = "results/mc_sim_mcmc"
 
-baseline = fcn_run_optim(kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns, true)
+println("Starting sensitivity analysis...")
+baseline = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, true)
 
-robust = fcn_run_optim(kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns, false)
+robust = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, false)
 
 # Run across all ns, number of scenarios in resolved uncertainty
-map((ns_i) -> fcn_run_optim(kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt, ns_i), ns_vec)
+map((ns_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns_i), ns_vec)
 
 # Run across different time periods for tt
-map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, "results/mc_sim", sp, tt_i, kt, 1), tt_vec)
-map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, "results/mc_sim", sp, tt_i, kt, ns), tt_vec)
+map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt_i, kt, 1), tt_vec)
+map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt_i, kt, ns), tt_vec)
 
 # Run across all kt
-map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt_i, 1), kt_vec)
-map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, "results/mc_sim", sp, tt, kt_i, ns), kt_vec)
+map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt_i, 1), kt_vec)
+map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt_i, ns), kt_vec)
 
 # Run across different sampled properties
-map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, "results/mc_sim", sp_i, tt, kt, 1), sp_vec)
-map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, "results/mc_sim", sp_i, tt, kt, ns), sp_vec)
+map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp_i, tt, kt, 1), sp_vec)
+map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp_i, tt, kt, ns), sp_vec)
+println("Sensitivity analysis complete.")
