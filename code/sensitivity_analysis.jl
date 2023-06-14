@@ -49,11 +49,18 @@ mutable struct Solution
 end
 
 # Cost to time series
-function cost_to_ts(cost::AbstractVector, area::AbstractVector, prop::AbstractVector, idx_before::AbstractVector=1:30, idx_after::AbstractVector=31:60, inflation_rate::AbstractFloat= -discount_rate)
+function cost_to_ts(cost::AbstractVector, area::AbstractVector, prop::AbstractVector, idx_before::AbstractVector=1:30, idx_after::AbstractVector=31:60,     inflation_rate::AbstractFloat= -discount_rate)
+    # cost: WTA in thousands per hectare per year
+    # area: Area in hectares
+    # idx_before: index of the costs before covenant modification
+    # idx_afer: index of the costs after covenant modification
+    # inflation_rate: growth of covenant payments over year in NPV terms (negative inflation_rate implies discounting over the future payments in NPV terms)
+
     delta = (1 + inflation_rate) .^ (cat(idx_before, idx_after, dims=1))
     delta_before = sum(delta[idx_before])
     delta_after = sum(delta[idx_after])
-    cost_ts = (cost .* 1000 .* area .* prop ./ 10) # Cost per-year: cost per ha * area * proportion / 10
+    covenant_area = area .* prop;
+    cost_ts = (cost .* 1000 .* covenant_area) # Cost per-year: cost per ha * area * proportion
     cost_before = cost_ts .* delta_before # Cost start at 2020
     cost_after = cost_ts .* delta_after
     return (cost_before, cost_after)
@@ -72,7 +79,8 @@ function subset_data(cost_full, kitl_index_full, subset_id::Vector{Int64})
 end
 
 function get_propid(subset_id::Vector{Int64})
-    return subset_data(cost_df, kitl_index_full, subset_id)
+    (cost_subset, kitl_subset) = subset_data(cost_df, kitl_index_full, subset_id)
+    return vec(cost_subset.NewPropID)
 end
 
 # Metrics to input
@@ -120,7 +128,7 @@ end
 # Realisation from MCMC sampling draws, with cost_subset constructed from fcn_get_predictions
 function fcn_realisation_sample_draws(cost_subset::DataFrame, kitl_subset::DataFrame, tt::Integer=4, kt::AbstractFloat=0.25)
     (M₁, M₂) = metric_to_input(kitl_subset, cost_subset.AREA, tt, kt)
-    adopt_binary = cost_subset.Adopt .< rand(length(cost_subset.Adopt))
+    adopt_binary = cost_subset.Adopt .> rand(length(cost_subset.Adopt))
     prop_binary = cost_subset.Prop .* adopt_binary
     (C₁, C₂) = cost_to_ts(cost_subset.WTA, cost_subset.AREA, prop_binary, 1:(10*(tt-1)), (1+10*(tt-1)):60, -discount_rate)
     sample_C₁ = C₁ .* prop_binary
@@ -256,15 +264,15 @@ end
 
 ## Start sensitivity analysis
 
-# Sensitivity parameters (base)
+# Sensitivity parameters (base), whilst avoid rerunning base parameters again in individual iteration
 sp = 1; # 1:100
-sp_vec = 1:50
-tt = 5; # [0,1,2,3,4,5,6,7]
-tt_vec = 3:6
+sp_vec = 2:50
+tt = 6; # [1,2,3,4,5,6,7,8], 2000 - 2070
+tt_vec = 3:5
 kt = 0.25; # [0.1, 0.15, 0.2, 0.25, 0.3]
-kt_vec = [0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3]
+kt_vec = [0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.275, 0.3]
 ns = 12; # 1:12
-ns_vec = 1:12
+ns_vec = [1,3,2,4,5,6,7,8,9,10,11]
 dir = "results/mc_sim_mcmc"
 
 println("Starting sensitivity analysis...")
