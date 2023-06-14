@@ -441,25 +441,58 @@ ggsave("plots/plot2.png", plot_list_ns[[3]], width = 2000, height = 800, units =
 
 plot_shaded_diff <- function(summary_diff_pct) {
   summary_diff_pct %>%
+    as.data.frame() %>%
     mutate(name = as.numeric(name)) %>%
+    mutate(recourse = factor(recourse, c('ar', 'tr', 'fr'), c('(A)', '(E)', '(A/E)'))) %>%
+    mutate(median = -median, lb = -lb, ub = -ub) %>%
     ggplot(aes(x = name, y = median)) +
     geom_ribbon(aes(ymin = lb, ymax = ub, fill = recourse), alpha = 0.25) +
     geom_hline(yintercept = 0) +
     geom_line(aes(color = recourse)) +
-    scale_y_continuous("Change in conservation cost", labels = scales::unit_format(scale = 100,unit = "%")) +
-    ggsci::scale_color_nejm() +
-    ggsci::scale_fill_nejm() +
+    #scale_y_continuous("Change in conservation cost", labels = scales::unit_format(scale = 100,unit = "%")) +
+    ggsci::scale_color_d3() +
+    ggsci::scale_fill_d3() +
     coord_cartesian(expand = F) +
-    ggpubr::theme_pubr()
+    ggpubr::theme_pubr() +
+    theme(legend.title = element_blank())
 }
 
-default <- c(1,5,0.25,12,10)
-flexibility_differences(params = default, loop_vec = 1:10, dep_var = 1) %>% 
-  plot_shaded_diff()
-flexibility_differences(params = default, loop_vec = c(2,3,4,5,6,7), dep_var = 2, realisation = 1:10) %>% 
-  plot_shaded_diff()
-flexibility_differences(params = default, loop_vec = c(0.1, 0.15, 0.2, 0.25), dep_var = 3, realisation = 1:10)%>% plot_shaded_diff()
-flexibility_differences(params = default, loop_vec = 1:12, dep_var = 4, realisation = 1:10, interval = c(0.05, 0.95)) %>% plot_shaded_diff() +
-  scale_x_reverse("Learning (number of climate scenarios)") +
-  scale_y_reverse("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(-1, 0.1))
+default <- c(1,6,0.25,12,10)
+sp_flex_diff <- flexibility_differences(params = default, loop_vec = 1:10, dep_var = 1)
+sp_flex_plot <- sp_flex_diff %>%
+  mutate(name = as.numeric(name)) %>%
+  mutate(median = -median, lb = -lb, ub = -ub) %>%
+  mutate(recourse = factor(recourse, c('ar', 'tr', 'fr'), c('(A)', '(E)', '(A/E)'))) %>%
+  mutate(model_num = as.numeric(recourse)) %>%
+  ggplot(aes(x = name + (model_num-1.5)*0.1, y = median, color = recourse)) +
+  geom_segment(aes(y = lb, yend = ub, x = name + (model_num-1.5)*0.1, xend = name + (model_num-1.5)*0.1)) +
+  geom_point() +
+  scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(-0.01, 0.4)) +
+  scale_x_continuous("Sample Index") +
+  ggsci::scale_color_d3() +
+  coord_cartesian() +
+  ggpubr::theme_pubr() +
+  theme(legend.title = element_blank())
 
+tt_flex_diff <- flexibility_differences(params = default, loop_vec = c(4,5,6,7), dep_var = 2, realisation = 1:10)
+tt_flex_plot <- tt_flex_diff %>%
+  plot_shaded_diff() +
+  scale_x_continuous("Year covenant modification allowed (t')", labels = function(x) (x-1)*10+2000) +
+  scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(-0.05, 0.6))
+
+kt_flex_diff <- flexibility_differences(params = default, loop_vec = c(0.1, 0.15, 0.2, 0.25), dep_var = 3, realisation = 1:10)
+kt_flex_plot <- kt_flex_diff %>%
+  plot_shaded_diff() +
+  scale_x_continuous("Koala landscape capacity indicator cut-off", limits = c(0.1, 0.26)) +
+  scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(-0.05, 0.4))
+
+ns_flex_diff <- flexibility_differences(params = default, loop_vec = 1:12, dep_var = 4, realisation = 1:10, interval = c(0.05, 0.95))
+ns_flex_plot <- ns_flex_diff %>% 
+  plot_shaded_diff() +
+  scale_x_reverse("Learning (number of climate scenarios)") +
+  scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(-0.05, 0.7))
+
+sensitivity_plots <- sp_flex_plot + tt_flex_plot + kt_flex_plot + ns_flex_plot + plot_layout(guides = "collect") & plot_annotation(tag_levels = 'a') & theme(legend.position = 'bottom')
+sensitivity_plots
+
+ggsave("plots/sensitivity_plots.png", sensitivity_plots)
