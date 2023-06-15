@@ -436,7 +436,6 @@ ggsave("plots/plot1.png", plot_list[[4]]$plot1, width = 2800, height = 2300, uni
 ggsave("plots/plot2.png", plot_list_ns[[3]], width = 2000, height = 800, units = 'px')
 
 
-
 # Sensitivity plots ------
 
 plot_shaded_diff <- function(summary_diff_pct) {
@@ -452,47 +451,85 @@ plot_shaded_diff <- function(summary_diff_pct) {
     #scale_y_continuous("Change in conservation cost", labels = scales::unit_format(scale = 100,unit = "%")) +
     ggsci::scale_color_d3() +
     ggsci::scale_fill_d3() +
-    coord_cartesian(expand = F) +
+    coord_cartesian(expand = T) +
     ggpubr::theme_pubr() +
     theme(legend.title = element_blank())
 }
 
-default <- c(1,6,0.25,12,10)
-sp_flex_diff <- flexibility_differences(params = default, loop_vec = 1:10, dep_var = 1)
-sp_flex_plot <- sp_flex_diff %>%
-  mutate(name = as.numeric(name)) %>%
-  mutate(median = -median, lb = -lb, ub = -ub) %>%
-  mutate(recourse = factor(recourse, c('ar', 'tr', 'fr'), c('(A)', '(E)', '(A/E)'))) %>%
-  mutate(model_num = as.numeric(recourse)) %>%
-  ggplot(aes(x = name + (model_num-1.5)*0.1, y = median, color = recourse)) +
-  geom_segment(aes(y = lb, yend = ub, x = name + (model_num-1.5)*0.1, xend = name + (model_num-1.5)*0.1)) +
-  geom_point() +
-  scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(-0.01, 0.4)) +
-  scale_x_continuous("Sample Index") +
-  ggsci::scale_color_d3() +
-  coord_cartesian() +
-  ggpubr::theme_pubr() +
-  theme(legend.title = element_blank())
+plot_line_diff <- function(summary_diff_pct, dodge_width = 0.0005, connect = T) {
+  p <- summary_diff_pct %>%
+    as.data.frame() %>%
+    mutate(name = as.numeric(name)) %>%
+    mutate(recourse = factor(recourse, c('ar', 'tr', 'fr'), c('(A)', '(E)', '(A/E)'))) %>%
+    mutate(median = -median, lb = -lb, ub = -ub) %>%
+    mutate(dodge_pos = name+ (as.numeric(recourse)-2)*dodge_width) %>%
+    ggplot(aes(x = dodge_pos, y = median)) +
+    geom_errorbar(aes(ymin = lb, ymax = ub, color = recourse), width = dodge_width*2) +
+    geom_hline(yintercept = 0) 
+  
+  if (connect) {
+    p <- p + geom_line(aes(color = recourse))
+  }
 
-tt_flex_diff <- flexibility_differences(params = default, loop_vec = c(4,5,6,7), dep_var = 2, realisation = 1:10)
-tt_flex_plot <- tt_flex_diff %>%
-  plot_shaded_diff() +
-  scale_x_continuous("Year covenant modification allowed (t')", labels = function(x) (x-1)*10+2000) +
-  scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(-0.05, 0.6))
+  p +
+    geom_point(aes(color = recourse)) +
+    scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%")) +
+    ggsci::scale_color_d3() +
+    ggsci::scale_fill_d3() +
+    ggpubr::theme_pubr() +
+    theme(legend.title = element_blank())
+}
 
-kt_flex_diff <- flexibility_differences(params = default, loop_vec = c(0.1, 0.15, 0.2, 0.25), dep_var = 3, realisation = 1:10)
-kt_flex_plot <- kt_flex_diff %>%
-  plot_shaded_diff() +
-  scale_x_continuous("Koala landscape capacity indicator cut-off", limits = c(0.1, 0.26)) +
-  scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(-0.05, 0.4))
+full_learning <- c(1,6,0.25,1,10)
+no_learning <- c(1,6,0.25,12,10)
+
+sp_flex_diff <- list(
+  full = flexibility_differences(params = full_learning, loop_vec = 1:10, dep_var = 1),
+  no = flexibility_differences(params = no_learning, loop_vec = 1:10, dep_var = 1)
+) %>%
+  bind_rows(.id = 'learning')
+
+tt_flex_diff <- list(
+  full = flexibility_differences(params = full_learning, loop_vec = c(3,4,5,6), dep_var = 2, realisation = 1:10),
+  no = flexibility_differences(params = no_learning, loop_vec = c(3,4,5,6), dep_var = 2, realisation = 1:10)
+) %>%
+  bind_rows(.id = 'learning')
+
+kt_flex_diff <- list(
+  full = flexibility_differences(params = full_learning, loop_vec = c(0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3), dep_var = 3),
+  no = flexibility_differences(params = no_learning, loop_vec = c(0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3), dep_var = 3)
+) %>%
+  bind_rows(.id = 'learning')
 
 ns_flex_diff <- flexibility_differences(params = default, loop_vec = 1:12, dep_var = 4, realisation = 1:10, interval = c(0.05, 0.95))
+
+
+sp_flex_plot <- sp_flex_diff %>%
+  mutate(learning = factor(learning, c('no', 'full'), c('No Learning', 'Full Learning'))) %>%
+  plot_line_diff(dodge_width = 0.1, connect = F) +
+  scale_x_continuous("Sample Index") +
+  facet_grid(cols = vars(learning)) +
+  theme(legend.title = element_blank())
+
+tt_flex_plot <- tt_flex_diff %>%
+  mutate(learning = factor(learning, c('no', 'full'), c('No Learning', 'Full Learning'))) %>%
+  plot_line_diff(dodge_width = 0.05) +
+  scale_x_continuous("Year covenant modification allowed (t')", labels = function(x) (x)*10+2000) +
+  facet_grid(cols = vars(learning)) +
+  theme(legend.title = element_blank())
+tt_flex_plot
+
+kt_flex_plot <- kt_flex_diff %>%
+  mutate(learning = factor(learning, c('no', 'full'), c('No Learning', 'Full Learning'))) %>%
+  plot_line_diff(dodge_width = 0.002) +
+  scale_x_continuous("Koala landscape capacity indicator cut-off", limits = c(0.09, 0.31)) +
+  facet_grid(cols = vars(learning)) +
+  theme(legend.title = element_blank())
+kt_flex_plot
+
 ns_flex_plot <- ns_flex_diff %>% 
-  plot_shaded_diff() +
-  scale_x_reverse("Learning (number of climate scenarios)") +
-  scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(-0.05, 0.7))
+  plot_line_diff(dodge_width = 0.1) +
+  scale_x_reverse("Learning (number of climate scenarios)", limits = c(12.5, 0.5))
+sensitivity_plots <- sp_flex_plot + tt_flex_plot + kt_flex_plot + ns_flex_plot + plot_layout(guides = "collect", ncol = 1) & plot_annotation(tag_levels = 'a') & theme(legend.position = 'bottom')
 
-sensitivity_plots <- sp_flex_plot + tt_flex_plot + kt_flex_plot + ns_flex_plot + plot_layout(guides = "collect") & plot_annotation(tag_levels = 'a') & theme(legend.position = 'bottom')
-sensitivity_plots
-
-ggsave("plots/sensitivity_plots.png", sensitivity_plots)
+ggsave("plots/sensitivity_plots.png", sensitivity_plots, width = 2300, height = 3500, units = 'px')
