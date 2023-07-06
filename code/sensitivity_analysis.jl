@@ -20,7 +20,6 @@ Random.seed!(54815861)
 
 include("optim-functions.jl")
 
-
 cost_df = CSV.read("data/spatial_predictions_10yr.csv", DataFrame);
 kitl_index_full = CSV.read("data/kitl_prop_climate.csv", DataFrame);
 stratified_samples = CSV.read("data/stratified_sample.csv", DataFrame);
@@ -105,28 +104,8 @@ function metric_to_input(metric::DataFrame, area::AbstractVector, tt::Integer, k
     return (M₁, M₂)
 end
 
-# Realisation
-function realisation_sample(cost_subset::DataFrame, kitl_subset::DataFrame, tt::Integer=4, kt::AbstractFloat=0.25)
-    (M₁, M₂) = metric_to_input(kitl_subset, vec(cost_subset.AREA), tt, kt)
-    MeanAdopt = cost_subset.MeanAdopt
-    SDAdopt = cost_subset.SDAdopt
-    MeanProp = cost_subset.MeanProp
-    SDProp = cost_subset.SDProp
-    MeanWTA = cost_subset.MeanWTA
-    SDWTA = cost_subset.SDWTA
-    adopt_binary = (rand.(Normal.(MeanAdopt, SDAdopt))) .> rand(length(MeanAdopt))
-    prop = (rand.(Normal.(MeanProp, SDProp))) .* adopt_binary
-    (C₁, C₂) = cost_to_ts(MeanWTA + SDWTA .* randn(length(SDWTA)), cost_subset.AREA, prop_binary, 1:(10*(tt-1)), (1+10*(tt-1)):60, 0.02)
-    sample_C₁ = C₁ .* prop
-    sample_C₂ = C₂ .* prop
-    sample_M₁ = M₁ .* prop
-    sample_M₂ = M₂ .* prop
-    area = vec(cost_subset.AREA) .* prop
-    return Realisation(sample_C₁, sample_C₂, sample_M₁, sample_M₂, area, adopt_binary)
-end
-
 # Realisation from MCMC sampling draws, with cost_subset constructed from fcn_get_predictions
-function fcn_realisation_sample_draws(cost_subset::DataFrame, kitl_subset::DataFrame, tt::Integer=4, kt::AbstractFloat=0.25)
+function fcn_realisation_sample_draws(cost_subset::DataFrame, kitl_subset::DataFrame, tt::Integer=4, kt::AbstractFloat=0.25, discount_rate::Real=0.02)
     (M₁, M₂) = metric_to_input(kitl_subset, cost_subset.AREA, tt, kt)
     adopt_binary = cost_subset.Adopt .> rand(length(cost_subset.Adopt))
     prop_binary = cost_subset.Prop .* adopt_binary
@@ -167,10 +146,10 @@ function fcn_get_predictions()
     return df
 end
 
-function fcn_subset_realisation_sample_draw(kitl_index_full::DataFrame, subset_id::AbstractVector, tt::Integer=4, kt::AbstractFloat=0.25)
+function fcn_subset_realisation_sample_draw(kitl_index_full::DataFrame, subset_id::AbstractVector, tt::Integer=4, kt::AbstractFloat=0.25, discount_rate::Real=0.02)
     cost_df = fcn_get_predictions();
     (cost_subset, kitl_subset) = subset_data(cost_df, kitl_index_full, subset_id)
-    realisation = fcn_realisation_sample_draws(cost_subset, kitl_subset, tt, kt)
+    realisation = fcn_realisation_sample_draws(cost_subset, kitl_subset, tt, kt, discount_rate)
     return realisation;
 end
 
@@ -180,12 +159,12 @@ function fcn_tidy_two_stage_solution_sum(solution, prop_id)
     return DataFrame(out, colnames)
 end
 
-function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, baseline_conditions=false)
+function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, discount_rate::Real=0.02, baseline_conditions=false)
     Random.seed!(54815861) # Ensure all realisation samples are the same
     # Subset of properties
-    run_string = "run_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)_r-$(rr)"
+    run_string = "run_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)_r-$(rr)_sdr-$(discount_rate)"
     subset_id = vec(stratified_samples[:, sp])
-    realisations = [fcn_subset_realisation_sample_draw(kitl_index_full, subset_id, tt, kt) for r in 1:R]
+    realisations = [fcn_subset_realisation_sample_draw(kitl_index_full, subset_id, tt, kt, discount_rate) for r in 1:R]
     out_propid = get_propid(subset_id);
     realisation_areas = hcat([realisations[r].area for r in 1:R]...)
     realisation_areas_df = DataFrame(realisation_areas, :auto)
@@ -273,25 +252,30 @@ kt = 0.25; # [0.1, 0.15, 0.2, 0.25, 0.3]
 kt_vec = [0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.275, 0.3]
 ns = 12; # 1:12
 ns_vec = [1,3,2,4,5,6,7,8,9,10,11]
+sdr = 0.01;
+sdr_vec = [0, 0.005, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
 dir = "results/mc_sim_mcmc"
 
 println("Starting sensitivity analysis...")
-baseline = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, true)
+baseline = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, true)
 
-robust = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, false)
+robust = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, false)
+
+# Run across all choices of the discount rate
+map((sdr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr_i), sdr_vec)
 
 # Run across all ns, number of scenarios in resolved uncertainty
-map((ns_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns_i), ns_vec)
+map((ns_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns_i, sdr), ns_vec)
 
 # Run across different time periods for tt
-map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt_i, kt, 1), tt_vec)
-map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt_i, kt, ns), tt_vec)
+map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt_i, kt, 1, sdr), tt_vec)
+map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt_i, kt, ns, sdr), tt_vec)
 
 # Run across all kt
-map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt_i, 1), kt_vec)
-map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt_i, ns), kt_vec)
+map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt_i, 1, sdr), kt_vec)
+map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt_i, ns, sdr), kt_vec)
 
 # Run across different sampled properties
-map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp_i, tt, kt, 1), sp_vec)
-map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp_i, tt, kt, ns), sp_vec)
+map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp_i, tt, kt, 1, sdr), sp_vec)
+map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp_i, tt, kt, ns, sdr), sp_vec)
 println("Sensitivity analysis complete.")

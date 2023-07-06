@@ -91,33 +91,33 @@ fcn_generate_plot(4, plot_list)
 ```
 :::
 
-## Flexible adaptation 50% more cost-effective
+## Flexible adaptation halves conservation costs
 
 ::: r-stack
 ```{r dpi=300}
 #| classes: .fragment .current-visible
-#| fig-cap: "CC: $51M ($44-61M)"
+#| fig-cap: "CC: $70M ($13-138M)"
 #| fig-cap-location: top
 plot_list[[1]]$cost_plot
 ```
 
 ```{r dpi=300}
 #| classes: .fragment .current-visible
-#| fig-cap: "RI: $108M ($101-117M)"
+#| fig-cap: "RI: $152M ($100-229M)"
 #| fig-cap-location: top
 plot_list[[2]]$cost_plot
 ```
 
 ```{r dpi=300}
 #| classes: .fragment .current-visible
-#| fig-cap: "F: $72M ($63-81M) -- 37% cost reduction"
+#| fig-cap: "F: $84M ($36-161M) -- 42% cost reduction"
 #| fig-cap-location: top
 plot_list[[3]]$cost_plot
 ```
 
 ```{r dpi=300}
 #| classes: .fragment .current-visible
-#| fig-cap: "Flexible + Learning: $59M ($48-74M) -- 49% cost reduction"
+#| fig-cap: "Flexible + Learning: $78M ($25-166M) -- 44% cost reduction"
 #| fig-cap-location: top
 plot_list[[4]]$cost_plot
 ```
@@ -128,7 +128,7 @@ plot_list[[4]]$cost_plot
 ::: r-stack
 ```{r dpi=300}
 #| classes: .fragment .current-visible
-#| fig-cap: "CC: $51M ($44-61M)"
+#| fig-cap: "Flexibility to delay investments only"
 #| fig-cap-location: top
 plot_list_ns <- readRDS('../plots/plot_list_ns.rds')
 bar_width <- 0.2
@@ -137,14 +137,14 @@ plot_list_ns[[1]]
 
 ```{r dpi=300}
 #| classes: .fragment .current-visible
-#| fig-cap: "RI: $108M ($101-117M)"
+#| fig-cap: "Flexibility to end interventions only"
 #| fig-cap-location: top
 plot_list_ns[[2]]
 ```
 
 ```{r dpi=300}
 #| classes: .fragment .current-visible
-#| fig-cap: "F: $72M ($63-81M) -- 37% cost reduction"
+#| fig-cap: "Flexbility to delay and end investments"
 #| fig-cap-location: top
 plot_list_ns[[3]]
 ```
@@ -161,6 +161,7 @@ plot_list_ns[[3]]
 :::
 
 ::: fragment
+Thank you to co-authors: Brooke Williams, Carla Archibald, James Brazill-Boast, Michael Drielsma and Jonathan Rhodes
 ![](assets/partner_logos_wide.png){width="100%"}
 :::
 
