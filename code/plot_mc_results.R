@@ -17,9 +17,10 @@ tt = 6 # [0,1,2,3,4,5,6,7]
 kt = 0.25 # [0.1, 0.15, 0.2, 0.25, 0.3]
 ns = 12 # 1:12
 rr = 10
+sdr = 0.01
 
-flexibility_differences <- function(recourse = NULL, loop_vec = 1:10, params = c(sp, tt, kt, ns, rr), dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
-  base_string <- "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s"
+flexibility_differences <- function(recourse = NULL, loop_vec = 1:10, params = c(sp, tt, kt, ns, rr, sdr), dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
+  base_string <- "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s"
   cost_diff_pct <- lapply(loop_vec, function(x) {
     vec_var <- params
     vec_var[dep_var] <- x
@@ -91,7 +92,7 @@ spatial_pred <- read_csv('data/spatial_predictions_10yr.csv')
 scen_list <- c('CC', 'RI', 'F', 'F+L')
 plot_list <- list()
 
-for (i in 4:length(scen_list)) {
+for (i in 1:length(scen_list)) {
   scen_list_i <- scen_list[1:i]
 
   get_run_string <- function(param=default) do.call(sprintf, c(fmt = "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s", as.list(param)))
@@ -418,7 +419,7 @@ for (i in 1:length(recourse_types)) {
     ggsci::scale_fill_d3() +
     ggpubr::theme_pubr() +
     guides(color = 'none', fill = 'none') +
-    scale_y_continuous("Cost reduction \n(relative to Robust)", labels = scales::unit_format(scale = 100,unit = "%")) +
+    scale_y_continuous("Cost reduction \n(relative to RI)", labels = scales::unit_format(scale = 100,unit = "%")) +
     coord_cartesian(xlim = c(.8,3.2)) +
     theme(axis.title.x = element_blank(),
           axis.line = element_blank(),
@@ -480,8 +481,9 @@ plot_line_diff <- function(summary_diff_pct, dodge_width = 0.0005, connect = T) 
     theme(legend.title = element_blank())
 }
 
-full_learning <- c(1,6,0.25,1,10)
-no_learning <- c(1,6,0.25,12,10)
+# Extract matrices of the differences between robust and flexible solutions -----
+full_learning <- c(1,6,0.25,1,10,0.01)
+no_learning <- c(1,6,0.25,12,10,0.01)
 
 sp_flex_diff <- list(
   full = flexibility_differences(params = full_learning, loop_vec = 1:10, dep_var = 1),
@@ -501,35 +503,10 @@ kt_flex_diff <- list(
 ) %>%
   bind_rows(.id = 'learning')
 
-ns_flex_diff <- flexibility_differences(params = default, loop_vec = 1:12, dep_var = 4, realisation = 1:10, interval = c(0.05, 0.95))
+ns_flex_diff <- flexibility_differences(params = no_learning, loop_vec = 1:12, dep_var = 4, realisation = 1:10, interval = c(0.05, 0.95))
 
-
-sp_flex_plot <- sp_flex_diff %>%
-  mutate(learning = factor(learning, c('no', 'full'), c('No Learning', 'Full Learning'))) %>%
-  plot_line_diff(dodge_width = 0.1, connect = F) +
-  scale_x_continuous("Sample Index") +
-  facet_grid(cols = vars(learning)) +
-  theme(legend.title = element_blank())
-
-tt_flex_plot <- tt_flex_diff %>%
-  mutate(learning = factor(learning, c('no', 'full'), c('No Learning', 'Full Learning'))) %>%
-  plot_line_diff(dodge_width = 0.05) +
-  scale_x_continuous("Year covenant modification allowed (t')", labels = function(x) (x)*10+2000) +
-  facet_grid(cols = vars(learning)) +
-  theme(legend.title = element_blank())
-tt_flex_plot
-
-kt_flex_plot <- kt_flex_diff %>%
-  mutate(learning = factor(learning, c('no', 'full'), c('No Learning', 'Full Learning'))) %>%
-  plot_line_diff(dodge_width = 0.002) +
-  scale_x_continuous("Koala landscape capacity indicator cut-off", limits = c(0.09, 0.31)) +
-  facet_grid(cols = vars(learning)) +
-  theme(legend.title = element_blank())
-kt_flex_plot
-
-ns_flex_plot <- ns_flex_diff %>% 
-  plot_line_diff(dodge_width = 0.1) +
-  scale_x_reverse("Learning (number of climate scenarios)", limits = c(12.5, 0.5))
-sensitivity_plots <- sp_flex_plot + tt_flex_plot + kt_flex_plot + ns_flex_plot + plot_layout(guides = "collect", ncol = 1) & plot_annotation(tag_levels = 'a') & theme(legend.position = 'bottom')
-
-ggsave("plots/sensitivity_plots.png", sensitivity_plots, width = 2300, height = 3500, units = 'px')
+sdr_flex_diff <- list(
+  #full = flexibility_differences(params = full_learning, loop_vec = c("0.0", 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 6),
+  no = flexibility_differences(params = no_learning, loop_vec = c("0.0", 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 6)
+) %>%
+  bind_rows(.id = 'learning')
