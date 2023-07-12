@@ -17,19 +17,33 @@ tt = 6 # [0,1,2,3,4,5,6,7]
 kt = 0.25 # [0.1, 0.15, 0.2, 0.25, 0.3]
 ns = 12 # 1:12
 rr = 10
-sdr = 0.01
+sdr = 0.02
+dr = 0.1
 
-flexibility_differences <- function(recourse = NULL, loop_vec = 1:10, params = c(sp, tt, kt, ns, rr, sdr), dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
-  base_string <- "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s"
+
+flexibility_differences <- function(recourse = c(T,T,F,F), loop_vec = 1:10, params = c(sp, tt, kt, ns, rr, sdr, dr), dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
+  base_string <- "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s"
   cost_diff_pct <- lapply(loop_vec, function(x) {
     vec_var <- params
     vec_var[dep_var] <- x
     run_string <- do.call(sprintf, c(fmt = base_string, as.list(vec_var)))
-    nr <- read_csv(paste0(results_dir, "cost_nr_", run_string, ".csv"), col_types = cols())
-    ar <- read_csv(paste0(results_dir, "cost_ar_", run_string, ".csv"), col_types = cols()) # recourse solution
-    tr <- read_csv(paste0(results_dir, "cost_tr_", run_string, ".csv"), col_types = cols()) # recourse solution
-    fr <- read_csv(paste0(results_dir, "cost_fr_", run_string, ".csv"), col_types = cols()) # recourse solution
-    diff <- list(ar = (ar - nr) / nr, tr = (tr - nr)/ nr, fr = (fr - nr)/nr)
+    diff <- list()
+    if (recourse[1]) {
+      nr <- read_csv(paste0(results_dir, "cost_nr_", run_string, ".csv"), col_types = cols())
+    }
+    if (recourse[2]){
+      ar <- read_csv(paste0(results_dir, "cost_ar_", run_string, ".csv"), col_types = cols()) # recourse solution
+      diff$ar = (ar - nr) / nr
+    }
+    if (recourse[3]){
+      tr <- read_csv(paste0(results_dir, "cost_tr_", run_string, ".csv"), col_types = cols()) # recourse solution
+      diff$tr = (tr - nr)/ nr
+      }
+    if (recourse[4]) {
+      fr <- read_csv(paste0(results_dir, "cost_fr_", run_string, ".csv"), col_types = cols()) # recourse solution
+      diff$fr = (fr - nr)/nr
+    }
+    diff
   })
   names(cost_diff_pct) <- as.character(loop_vec)
   summary_diff_pct <- map(cost_diff_pct, function(list_x) {
@@ -95,11 +109,11 @@ plot_list <- list()
 for (i in 1:length(scen_list)) {
   scen_list_i <- scen_list[1:i]
 
-  get_run_string <- function(param=default) do.call(sprintf, c(fmt = "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s", as.list(param)))
-  baseline_string <- get_run_string(c(sp, tt, kt, ns, rr))
-  robust_string   <- get_run_string(c(sp, tt, kt, ns, rr))
-  flexible_string <- get_run_string(c(sp, tt, kt, ns, rr))
-  flexible_learning_string <- get_run_string(c(sp, tt, kt, 1, rr))
+  get_run_string <- function(param=default) do.call(sprintf, c(fmt = "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s", as.list(param)))
+  baseline_string <- get_run_string(c(sp, tt, kt, ns, rr, sdr, dr))
+  robust_string   <- get_run_string(c(sp, tt, kt, ns, rr, sdr, dr))
+  flexible_string <- get_run_string(c(sp, tt, kt, ns, rr, sdr, dr))
+  flexible_learning_string <- get_run_string(c(sp, tt, kt, 1, rr, sdr, dr))
   
   baseline_metric <- read_csv(paste0(results_dir, "metric_baseline_", baseline_string, ".csv"), col_types = cols())
   robust_metric <- read_csv(paste0(results_dir, "metric_nr_", robust_string, ".csv"), col_types = cols())
@@ -119,7 +133,7 @@ for (i in 1:length(scen_list)) {
     lapply(summary_stat) %>%
     bind_rows(.id = 'model') %>%
     mutate(year = year_vec[t]) %>%
-    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) %>%
+    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     filter(model %in% scen_list_i)
   
   year_trend_plot <- baseline_robust_df %>%
@@ -149,9 +163,9 @@ for (i in 1:length(scen_list)) {
     geom_hline(yintercept = 7000) +
     geom_rect(aes(ymin = lb, ymax = ub, xmin = name_num - 0.4, xmax = name_num + 0.4))+
     geom_segment(aes(y = median, yend = median, x = name_num-0.4, xend = name_num+0.4), color = 'white', linewidth = 1) +
-    geom_text(aes(y = 0, x = name_num, label = model, color = model), size = 4, vjust = 0.5) +
+    #geom_text(aes(y = 0, x = name_num, label = model, color = model), size = 4, vjust = 0.5) +
     coord_cartesian(ylim = c(0, 15000)) +
-    guides(color = 'none', fill = 'none') +
+    guides(color = 'none') +
     ggsci::scale_fill_nejm() +
     ggsci::scale_color_nejm() +
     theme_void() +
@@ -228,14 +242,14 @@ for (i in 1:length(scen_list)) {
   offered_area <- list(baseline = baseline_offered_area, robust = robust_offered_area, 
                        flexible = flexible_offered_area, flexible_learning = flexible_learning_offered_area) %>%
     bind_rows(.id = 'model') %>%
-    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) %>%
+    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     filter(year >= 2020) %>%
     filter(model %in% scen_list_i)
   
   covenanted_area_plot <- list(baseline = baseline_area_ts, robust = robust_area_ts, flexible = flexible_area_ts, flexible_learning = flexible_learning_area_ts) %>%
     bind_rows(.id = 'model') %>%
     pivot_wider(names_from = 'stat', values_from = 'area') %>%
-    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) %>%
+    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     filter(year >= 2020) %>%
     filter(model %in% scen_list_i) %>%
     ggplot(aes(x = year)) +
@@ -265,7 +279,7 @@ for (i in 1:length(scen_list)) {
   covenanted_area_end_plot <- list(baseline = baseline_area_ts, robust = robust_area_ts, flexible = flexible_area_ts, flexible_learning = flexible_learning_area_ts) %>%
     bind_rows(.id = 'model') %>%
     pivot_wider(names_from = 'stat', values_from = 'area') %>%
-    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) %>%
+    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     filter(year == 2070) %>%
     filter(model %in% scen_list_i) %>%
     mutate(name_num = as.numeric(as.factor(model))) %>%
@@ -273,9 +287,9 @@ for (i in 1:length(scen_list)) {
     #geom_hline(yintercept = 7000) +
     geom_rect(aes(ymin = lb, ymax = ub, xmin = name_num - 0.4, xmax = name_num + 0.4))+
     geom_point(data = offered_area_end, aes(y = area, x = name_num, color = model), size = 2, shape = 23) +
-    geom_text(aes(y = 3500, x = name_num, label = model, color = model), size = 4, vjust = 0) +
+    #geom_text(aes(y = 3500, x = name_num, label = model, color = model), size = 4, vjust = 0) +
     coord_cartesian(ylim = c(3000, 23000)) +
-    guides(color = 'none', fill = 'none') +
+    guides(color = 'none') +
     ggsci::scale_fill_nejm() +
     ggsci::scale_color_nejm() +
     theme_void() +
@@ -296,7 +310,7 @@ for (i in 1:length(scen_list)) {
     pivot_wider(names_from = 'stat', values_from = 'cost')
   
   cost_df <- costs %>%
-    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) %>%
+    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     mutate(name_num = as.numeric(model)) %>%
     filter(model %in% scen_list_i)
   
@@ -310,14 +324,14 @@ for (i in 1:length(scen_list)) {
     cost_plot <- cost_plot +
       annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(robust_costs)), x = 2, xend = 6.5, color = 'gray20', linetype = 1) +
       annotate('segment', y = median(unlist(flexible_costs)), yend = median(unlist(flexible_costs)),  x= 3, xend = 6.5, color = 'gray20', linetype = 2) +
-      annotate('text', y = mean(c(median(unlist(flexible_costs)),median(unlist(robust_costs)))), x = 5.5, label = "V(F)", hjust = 1) +
+      annotate('text', y = mean(c(median(unlist(flexible_costs)),median(unlist(robust_costs)))), x = 5.5, label = "*", hjust = 1) +
       annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(flexible_costs)), x = 5.6, xend = 5.6, arrow = arrow(length = unit(0.2, "cm")))
   }
   
   if ('F+L' %in% scen_list_i) {
     cost_plot <- cost_plot +
       annotate('segment', y = median(unlist(flexible_learning_costs)), yend = median(unlist(flexible_learning_costs)), x= 4, xend = 6.5, color = 'gray20', linetype = 2) +
-      annotate('text', y = median(unlist(flexible_learning_costs)) - 1e7, x = 5.9, label = "V(F+L)", hjust = 1) +
+      annotate('text', y = median(unlist(flexible_learning_costs)) - 1e7, x = 5.9, label = "**", hjust = 1) +
       annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(flexible_learning_costs)), x = 6, xend = 6, arrow = arrow(length = unit(0.2, "cm")))
   }
   
@@ -328,7 +342,7 @@ for (i in 1:length(scen_list)) {
     geom_text(aes(label = model, y = ub + 10e6, x = name_num, color = model)) +
     ggpubr::theme_pubr() +
     scale_y_continuous("Cost", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6)) +
-    coord_cartesian(ylim = c(0, 2.5e8), xlim = c(0,6.5), expand = F) +
+    coord_cartesian(ylim = c(0, 3e8), xlim = c(0,6.5), expand = F) +
     #scale_y_reverse() +
     guides(color = 'none') +
     theme(axis.title.x = element_blank(),
@@ -345,7 +359,7 @@ for (i in 1:length(scen_list)) {
     pivot_longer(c('x','y'), names_to = 'stage', values_to = 'decision') %>%
     mutate(area = ifelse(stage == 'y' & model == 'flexible_learning', UpperProp * AREA,UpperProp * AREA * decision)) %>%
     mutate(probability = ifelse(stage == 'y' & model == 'flexible_learning', decision, decision > 0)) %>%
-    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), c('CC', 'RI', 'F', 'F+L'))) %>%
+    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     filter(decision > 0) %>%
     mutate(stage = factor(stage, c('x','y'), c('Stage 1', 'Stage 2'))) %>%
     filter(model %in% scen_list_i)
@@ -371,8 +385,17 @@ for (i in 1:length(scen_list)) {
   
   plot1 <- wrap_elements(full=aus_plot) + wrap_elements(full=prop_decisions_plot) + cost_plot + covenanted_area_plot + covenanted_area_end_plot + year_trend_plot + end_range_plot + 
     plot_layout(design = layout, heights = c(2,1,1.5), widths = c(1,1.2,0.4)) & plot_annotation(tag_levels = 'a') 
-
   
+  plot1a <- wrap_elements(full=aus_plot) + wrap_elements(full=prop_decisions_plot) + 
+    plot_layout(design = layout, widths = c(1,1.5)) & plot_annotation(tag_levels = 'a') 
+  
+  layout_1b <- "
+  ABC
+  ADE
+  "
+  
+  plot1b <- cost_plot + covenanted_area_plot + covenanted_area_end_plot + year_trend_plot + end_range_plot + 
+    plot_layout(design = layout_1b, heights = c(1,1.5), widths = c(1,1.2,0.4)) & plot_annotation(tag_levels = 'a') 
   
   # Save plots to list
   plot_list[[i]] <- list(
@@ -383,7 +406,9 @@ for (i in 1:length(scen_list)) {
     covenanted_area_plot = covenanted_area_plot,
     covenanted_area_end_plot = covenanted_area_end_plot,
     end_range_plot = end_range_plot,
-    plot1 = plot1
+    plot1 = plot1,
+    plot1a = plot1a,
+    plot1b = plot1b
   )
 }
 
@@ -419,7 +444,7 @@ for (i in 1:length(recourse_types)) {
     ggsci::scale_fill_d3() +
     ggpubr::theme_pubr() +
     guides(color = 'none', fill = 'none') +
-    scale_y_continuous("Cost reduction \n(relative to RI)", labels = scales::unit_format(scale = 100,unit = "%")) +
+    scale_y_continuous("Cost reduction \n(relative to Inflexible)", labels = scales::unit_format(scale = 100,unit = "%")) +
     coord_cartesian(xlim = c(.8,3.2)) +
     theme(axis.title.x = element_blank(),
           axis.line = element_blank(),
@@ -482,8 +507,17 @@ plot_line_diff <- function(summary_diff_pct, dodge_width = 0.0005, connect = T) 
 }
 
 # Extract matrices of the differences between robust and flexible solutions -----
-full_learning <- c(1,6,0.25,1,10,0.01)
-no_learning <- c(1,6,0.25,12,10,0.01)
+full_learning <- c(1,6,0.25,1,12,0.02,0.1)
+no_learning <- c(1,6,0.25,12,12,0.02,0.1)
+
+dr_vec <- c("0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0")
+dr_flex_diff <- list(
+  no = flexibility_differences(params = no_learning, loop_vec = dr_vec, dep_var = 7),
+  full = flexibility_differences(params = full_learning, loop_vec = dr_vec, dep_var = 7)
+  ) %>%
+  bind_rows(.id = "learning")
+
+plot_line_diff(dr_flex_diff %>% filter(learning == 'no'))
 
 sp_flex_diff <- list(
   full = flexibility_differences(params = full_learning, loop_vec = 1:10, dep_var = 1),

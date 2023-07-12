@@ -10,17 +10,21 @@ Base.@kwdef mutable struct Realisation
     # M₂: second-stage management objective indicator, across all scenarios (N x S)
     # Area: total land area available for conservation
     # A: whether the landholder will consider a covenant or not (binary vector of length N)
+    # deforestation_risk: probability that land will be deforested between now and t'
+    # τ: indicator of land free of land clearing even without covenants
+
     C₁::AbstractArray
     C₂::AbstractArray
     M₁::AbstractArray
     M₂::AbstractArray
     area::AbstractArray
-    A::AbstractArray = ones(size(C₁, 1))
-    p::AbstractArray = ones(size(M₂, 2)) / size(M₂, 2)
+    deforestation_risk::Float64
+    τ::AbstractArray
+    p::AbstractArray
 
-
-    function Realisation(C₁, C₂, M₁, M₂, area, A=ones(size(C₁, 1)), p=ones(size(M₂, 3)) / size(M₂, 3))
-        return (new(C₁, C₂, M₁, M₂, area, A, p))
+    function Realisation(C₁::AbstractArray, C₂::AbstractArray, M₁::AbstractArray, M₂::AbstractArray, area::AbstractArray, deforestation_risk::Float64, p::AbstractArray)
+        τ=(rand(size(C₁, 1)) .< (1-deforestation_risk)) .* 1
+        return (new(C₁, C₂, M₁, M₂, area, deforestation_risk, τ, p))
     end
 end
 
@@ -214,6 +218,75 @@ function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, �
     )
 end
 
+function fcn_two_stage_opt_saa_deforestation(realisations=Vector{Realisation}; K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true, ns::Integer=1, baseline_conditions=false)
+    # Solve the deterministic equivalent of the two-stage problem with sample average approximation
+
+    # Arguments
+    # realisations: a vector of Realisations
+    # K: management objective
+    # β: cost of adding a unit in the second stage
+    # γ: cost of terminating a unit in the second stage
+    # add_recourse: whether to allow recourse to adding units in the second stage
+    # terminate_recourse: whether to allow recourse to terminating units in the second stage
+    # ns: number of scenarios in each resolution of uncertainty
+
+    N, S = get_properties(realisations[1]) # N: number of units, S: number of climate scenarios
+    J = length(realisations) # J: number of realisations of adoption behaviour
+    s_vec = fcn_resolve_scenario_incomplete(ns)
+
+    model = Model(Gurobi.Optimizer)
+    set_silent(model)
+    @variable(model, 0 <= x[1:N] <= 1) # First stage decision
+    @variable(model, z) # Worst-case costs across all cost realisations
+    @objective(model, Min, z)
+
+    # Objective is to minimise expected costs, z
+    C₁ = dropdims(mean(cat([realisations[j].C₁ for j in 1:J]..., dims=3), dims=3), dims=3)  # First-stage cost under the J-th realisation
+    C₂ = dropdims(mean(cat([realisations[j].C₂ for j in 1:J]..., dims=3), dims=3), dims=3)  # Second-stage cost under the J-th realisation
+
+    τ_bar = dropdims(mean(cat([realisations[j].τ for j in 1:J]..., dims=3), dims=3), dims=3) # Average land area after deforestation of properties without covenants
+
+    p = realisations[1].p  # Climate scenario probabilities
+
+    if (add_recourse)
+        @variable(model, 0 <= y[1:N, 1:S] <= 1) # Second stage decision: adding units
+        @constraint(model, [i in 1:N, s in 1:S], x[i] + y[i, s] <= 1)
+    end
+
+    if (terminate_recourse)
+        @variable(model, 0 <= w[1:N, 1:S] <= 1) # Second stage decision: terminating units
+        @constraint(model, [i in 1:N, s in 1:S], x[i] - w[i, s] >= 0)
+    end
+
+    @constraint(model, z >= sum((C₁ .+ C₂)' * x) + sum(p[s] * sum((add_recourse ? (β + C₂[i]) * realisations[s].τ[i] * y[i, s] : 0) + (terminate_recourse ? (γ - C₂[i]) * w[i, s] : 0) for i in 1:N) for s in 1:S))
+
+    for j = 1:J
+        M₁ = realisations[j].M₁ #.* realisations[j].A
+        M₂ = realisations[j].M₂ #.* realisations[j].A
+
+        if (baseline_conditions)
+            # Conservation goals only need to met under baseline conditions (i.e. third time step)
+            @constraint(model, [s in 1:S], M₁[:, 3, s]' * x .>= K)
+        else
+            # Objective must be reached across all climate realisations before climate is known
+            @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K)
+
+            # After uncertainty is revealed, the objective only needs to be met at that realised climate realisation
+            @constraint(model, [t in axes(M₂, 2), s in 1:S], M₂[:, t, s_vec[s]]' * (x .+ (add_recourse ? (y[:, s] .* realisations[s].τ) : 0) .- (terminate_recourse ? w[:, s] : 0)) .>= K)
+        end
+
+    end
+
+    optimize!(model)
+    return (
+        model=model,
+        obj_value=objective_value(model),
+        x=value.(x),
+        y=(add_recourse ? value.(y) : zeros(N, S)),
+        w=(terminate_recourse ? value.(w) : zeros(N, S))
+    )
+end
+
 # function fcn_two_stage_opt_robust(realisations::Realisation; Ω::AbstractFloat=sqrt(2*log(1/0.1))*sqrt(size(realisations.C₁,1)), K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true)
 #     # Solve the deterministic equivalent of the two-stage problem with sample average approximation
 #     # The conservation targets must be reached robustly
@@ -333,9 +406,9 @@ function fcn_evaluate_solution(model::Model, realisations::Vector{Realisation})
 
     for j = 1:J
         r = realisations[j]
-        cost = [(r.C₁'*x+r.C₂'*(x+y[:, s]-w[:, s]))[1] for s = 1:S]
+        cost = [sum(r.C₁'*x + r.C₂'*(x + realisations[s].τ .* y[:, s] - w[:, s])) for s = 1:S]
         metric_1 = mapreduce(permutedims, vcat, [r.M₁[:, :, s]' * x for s = 1:S])'
-        metric_2 = mapreduce(permutedims, vcat, [r.M₂[:, :, s]' * (x + y[:, s] - w[:, s]) for s = 1:S])'
+        metric_2 = mapreduce(permutedims, vcat, [r.M₂[:, :, s]' * (x + realisations[s].τ .* y[:, s] - w[:, s]) for s = 1:S])'
         metric = vcat(metric_1, metric_2)
         cost_mat[:, j] = cost
         metric_mat[:, :, j] = metric'
