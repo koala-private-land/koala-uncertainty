@@ -24,17 +24,16 @@ cost_df = CSV.read("data/spatial_predictions_10yr.csv", DataFrame);
 kitl_index_full = CSV.read("data/kitl_prop_climate.csv", DataFrame);
 stratified_samples = CSV.read("data/stratified_sample.csv", DataFrame);
 climateProjList = ["CCCMA_R1", "CCCMA_R2", "CCCMA_R3", "CSIRO_R1", "CSIRO_R2", "CSIRO_R3", "ECHAM_R1", "ECHAM_R2", "ECHAM_R3", "MIROC_R1", "MIROC_R2", "MIROC_R3"];
-discount_rate = 0.02;
-model_matrix_x = [Matrix(CSV.read("data/model_matrix/Model_MatrixX.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
-model_matrix_y = [Matrix(CSV.read("data/model_matrix/Model_MatrixY.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
-model_matrix_z = [Matrix(CSV.read("data/model_matrix/Model_MatrixZ.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
-coefs_x = [Matrix(CSV.read("data/model_matrix/CoefsX.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
-coefs_y = [Matrix(CSV.read("data/model_matrix/CoefsY.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
-coefs_z = [Matrix(CSV.read("data/model_matrix/CoefsZ.10yr_$i.csv", DataFrame, header=false)) for i in 1:10];
+model_matrix_x = [Matrix(CSV.read("data/model_matrix/Model_MatrixX.Inf_$i.csv", DataFrame, header=false)) for i in 1:10];
+model_matrix_y = [Matrix(CSV.read("data/model_matrix/Model_MatrixY.Inf_$i.csv", DataFrame, header=false)) for i in 1:10];
+model_matrix_z = [Matrix(CSV.read("data/model_matrix/Model_MatrixZ.Inf_$i.csv", DataFrame, header=false)) for i in 1:10];
+coefs_x = [Matrix(CSV.read("data/model_matrix/CoefsX.Inf_$i.csv", DataFrame, header=false)) for i in 1:10];
+coefs_y = [Matrix(CSV.read("data/model_matrix/CoefsY.Inf_$i.csv", DataFrame, header=false)) for i in 1:10];
+coefs_z = [Matrix(CSV.read("data/model_matrix/CoefsZ.Inf_$i.csv", DataFrame, header=false)) for i in 1:10];
 
 # Constants
 R = 100; # Total number of uncertainty realisations
-rr = 10; # Sampled realisations
+rr = 12; # Sampled realisations
 K = 7000; # Habitat protection goal
 
 mutable struct Solution
@@ -48,20 +47,26 @@ mutable struct Solution
 end
 
 # Cost to time series
-function cost_to_ts(cost::AbstractVector, area::AbstractVector, prop::AbstractVector, idx_before::AbstractVector=1:30, idx_after::AbstractVector=31:60,     inflation_rate::AbstractFloat= -discount_rate)
+function cost_to_ts(cost::AbstractVector, area::AbstractVector, prop::AbstractVector, idx_before::AbstractVector=1:30, idx_after::AbstractVector=31:60, discount_rate::AbstractFloat= 0.02, perpetuity::Bool=true)
     # cost: WTA in thousands per hectare per year
     # area: Area in hectares
     # idx_before: index of the costs before covenant modification
     # idx_afer: index of the costs after covenant modification
-    # inflation_rate: growth of covenant payments over year in NPV terms (negative inflation_rate implies discounting over the future payments in NPV terms)
+    # discount_rate: discounting of future costs
 
-    delta = (1 + inflation_rate) .^ (cat(idx_before, idx_after, dims=1))
+    delta = (1 - discount_rate) .^ (cat(idx_before, idx_after, dims=1))
     delta_before = sum(delta[idx_before])
     delta_after = sum(delta[idx_after])
     covenant_area = area .* prop;
     cost_ts = (cost .* 1000 .* covenant_area) # Cost per-year: cost per ha * area * proportion
-    cost_before = cost_ts .* delta_before # Cost start at 2020
-    cost_after = cost_ts .* delta_after
+
+    if (perpetuity)
+        cost_before = cost_ts .* delta_before # Cost start at 2020, and is a annuity payment until the end of idx_before
+        cost_after = (cost_ts .* delta[idx_after[1]]) ./ discount_rate # Perpetuity costs starting at idx_after
+    else
+        cost_before = cost_ts .* delta_before # Cost start at 2020, and is a annuity payment until the end of idx_before
+        cost_after = cost_ts .* delta_after # Cost start at 2020, and is a annuity payment until the end of idx_before
+    end
     return (cost_before, cost_after)
 end
 
@@ -69,6 +74,7 @@ end
 function subset_propid(df, subset_id)
     return df[findall(in(subset_id),df.NewPropID),:]
 end
+
 function subset_data(cost_full, kitl_index_full, subset_id::Vector{Int64})
     cost_subset = subset_propid(cost_full, subset_id)
     kitl_subset = subset_propid(kitl_index_full, subset_id)
@@ -105,17 +111,18 @@ function metric_to_input(metric::DataFrame, area::AbstractVector, tt::Integer, k
 end
 
 # Realisation from MCMC sampling draws, with cost_subset constructed from fcn_get_predictions
-function fcn_realisation_sample_draws(cost_subset::DataFrame, kitl_subset::DataFrame, tt::Integer=4, kt::AbstractFloat=0.25, discount_rate::Real=0.02)
+function fcn_realisation_sample_draws(cost_subset::DataFrame, kitl_subset::DataFrame, tt::Integer=4, kt::AbstractFloat=0.25, discount_rate::Real=0.02, deforestation_risk::Real=0.03)
     (M₁, M₂) = metric_to_input(kitl_subset, cost_subset.AREA, tt, kt)
     adopt_binary = cost_subset.Adopt .> rand(length(cost_subset.Adopt))
     prop_binary = cost_subset.Prop .* adopt_binary
-    (C₁, C₂) = cost_to_ts(cost_subset.WTA, cost_subset.AREA, prop_binary, 1:(10*(tt-1)), (1+10*(tt-1)):60, -discount_rate)
+    (C₁, C₂) = cost_to_ts(cost_subset.WTA, cost_subset.AREA, prop_binary, 1:(10*(tt-1)), (1+10*(tt-1)):60, discount_rate)
     sample_C₁ = C₁ .* prop_binary
     sample_C₂ = C₂ .* prop_binary
     sample_M₁ = M₁ .* prop_binary
     sample_M₂ = M₂ .* prop_binary
     area = vec(cost_subset.AREA) .* prop_binary
-    return Realisation(sample_C₁, sample_C₂, sample_M₁, sample_M₂, area, adopt_binary)
+    p = ones(size(sample_M₂, 3)) / size(sample_M₂, 3)
+    return Realisation(sample_C₁, sample_C₂, sample_M₁, sample_M₂, area, deforestation_risk, p)
 end
 
 function fcn_get_predictions()
@@ -146,10 +153,10 @@ function fcn_get_predictions()
     return df
 end
 
-function fcn_subset_realisation_sample_draw(kitl_index_full::DataFrame, subset_id::AbstractVector, tt::Integer=4, kt::AbstractFloat=0.25, discount_rate::Real=0.02)
+function fcn_subset_realisation_sample_draw(kitl_index_full::DataFrame, subset_id::AbstractVector, tt::Integer=4, kt::AbstractFloat=0.25, discount_rate::Real=0.02, deforestation_risk=0.03)
     cost_df = fcn_get_predictions();
     (cost_subset, kitl_subset) = subset_data(cost_df, kitl_index_full, subset_id)
-    realisation = fcn_realisation_sample_draws(cost_subset, kitl_subset, tt, kt, discount_rate)
+    realisation = fcn_realisation_sample_draws(cost_subset, kitl_subset, tt, kt, discount_rate, deforestation_risk)
     return realisation;
 end
 
@@ -159,21 +166,23 @@ function fcn_tidy_two_stage_solution_sum(solution, prop_id)
     return DataFrame(out, colnames)
 end
 
-function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, discount_rate::Real=0.02, baseline_conditions=false)
+function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, discount_rate::Real=0.02, deforestation_risk = 0.03, baseline_conditions=false, recourses = (true,true,false,false))
     Random.seed!(54815861) # Ensure all realisation samples are the same
     # Subset of properties
-    run_string = "run_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)_r-$(rr)_sdr-$(discount_rate)"
+    run_string = "run_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)_r-$(rr)_sdr-$(discount_rate)_dr-$(deforestation_risk)"
+    println("Starting run $(run_string)")
     subset_id = vec(stratified_samples[:, sp])
-    realisations = [fcn_subset_realisation_sample_draw(kitl_index_full, subset_id, tt, kt, discount_rate) for r in 1:R]
+    realisations = [fcn_subset_realisation_sample_draw(kitl_index_full, subset_id, tt, kt, discount_rate, deforestation_risk) for r in 1:R]
     out_propid = get_propid(subset_id);
     realisation_areas = hcat([realisations[r].area for r in 1:R]...)
     realisation_areas_df = DataFrame(realisation_areas, :auto)
     CSV.write("$(out_dir)/area_$(run_string).csv", realisation_areas_df)
     worst_case_khab = minimum([minimum(sum(realisations[r].M₂, dims=1)) for r in 1:rr])
     metric_reshape = m -> DataFrame(reshape(permutedims(m, (1, 3, 2)), (size(m, 1) * size(m, 3), size(m, 2))), :auto)
+    (no_recourse, add_recourse, terminate_recourse, full_recourse) = recourses
 
-    if (baseline_conditions)
-        solution_nr = fcn_two_stage_opt_saa(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=false, baseline_conditions=true)
+    if (baseline_conditions && no_recourse)
+        solution_nr = fcn_two_stage_opt_saa_deforestation(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=false, baseline_conditions=true)
         (cost_nr, metric_nr) = fcn_evaluate_solution(solution_nr.model, realisations)
         CSV.write("$(out_dir)/cost_baseline_$(run_string).csv", DataFrame(cost_nr, :auto))
         CSV.write("$(out_dir)/metric_baseline_$(run_string).csv", metric_reshape(metric_nr))
@@ -184,60 +193,90 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
         return out_nr
     end
 
-    if (isfile("$(out_dir)/decision_fr_$(run_string).jld"))
-        return
-    end
+    #if (isfile("$(out_dir)/decision_ar_$(run_string).csv"))
+    #    println("Run $(run_string) skipped because output is present")
+    #    return
+    #end
 
     if (worst_case_khab < K)
         println("Constraint infeasible for this scenario")
         return
     else
-        solution_nr = fcn_two_stage_opt_saa(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=false)
-        solution_ar = fcn_two_stage_opt_saa(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=true)
-        solution_tr = fcn_two_stage_opt_saa(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=true, add_recourse=false)
-        solution_fr = fcn_two_stage_opt_saa(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=true, add_recourse=true)
+        if (no_recourse) 
+             solution_nr = fcn_two_stage_opt_saa_deforestation(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=false)
+        end
+        if (add_recourse) 
+             solution_ar = fcn_two_stage_opt_saa_deforestation(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=true)
+        end
+        if (terminate_recourse) 
+             solution_tr = fcn_two_stage_opt_saa_deforestation(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=true, add_recourse=false)
+        end
+
+        if (full_recourse) 
+            solution_fr = fcn_two_stage_opt_saa_deforestation(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=true, add_recourse=true)
+        end
     end
 
-    (cost_nr, metric_nr) = fcn_evaluate_solution(solution_nr.model, realisations)
-    (cost_ar, metric_ar) = fcn_evaluate_solution(solution_ar.model, realisations)
-    (cost_tr, metric_tr) = fcn_evaluate_solution(solution_tr.model, realisations)
-    (cost_fr, metric_fr) = fcn_evaluate_solution(solution_fr.model, realisations)
+    if (no_recourse) 
+        (cost_nr, metric_nr) = fcn_evaluate_solution(solution_nr.model, realisations)
+        decision_nr = fcn_tidy_two_stage_solution_sum(solution_nr, out_propid)
+    end
+    if (add_recourse) 
+        (cost_ar, metric_ar) = fcn_evaluate_solution(solution_ar.model, realisations)
+        decision_ar = fcn_tidy_two_stage_solution_sum(solution_ar, out_propid)
+    end
 
-    decision_nr = fcn_tidy_two_stage_solution_sum(solution_nr, out_propid)
-    decision_ar = fcn_tidy_two_stage_solution_sum(solution_ar, out_propid)
-    decision_tr = fcn_tidy_two_stage_solution_sum(solution_tr, out_propid)
-    decision_fr = fcn_tidy_two_stage_solution_sum(solution_fr, out_propid)
+    if (terminate_recourse) 
+         (cost_tr, metric_tr) = fcn_evaluate_solution(solution_tr.model, realisations)
+         decision_tr = fcn_tidy_two_stage_solution_sum(solution_tr, out_propid)
+    end
+    if (full_recourse) 
+         (cost_fr, metric_fr) = fcn_evaluate_solution(solution_fr.model, realisations)
+         decision_fr = fcn_tidy_two_stage_solution_sum(solution_fr, out_propid)
+    end
+    
+    if (add_recourse)
+        median_ar = median((cost_ar .- cost_nr) ./ cost_nr)
+        lb_ar = quantile(vec((cost_ar .- cost_nr) ./ cost_nr), 0.025)
+        ub_ar = quantile(vec((cost_ar .- cost_nr) ./ cost_nr), 0.975)
+        println("Value of recourse to add covenants ($(run_string)): $(round(median_ar*100))% [$(round(lb_ar*100))% - $(round(ub_ar*100))%]")
+    end
 
-    median_ar = median((cost_ar .- cost_nr) ./ cost_nr)
-    lb_ar = quantile(vec((cost_ar .- cost_nr) ./ cost_nr), 0.025)
-    ub_ar = quantile(vec((cost_ar .- cost_nr) ./ cost_nr), 0.975)
-    println("Value of recourse to add covenants ($(run_string)): $(round(median_ar*100))% [$(round(lb_ar*100))% - $(round(ub_ar*100))%]")
-
-    median_fr = median((cost_fr .- cost_nr) ./ cost_nr)
-    lb_fr = quantile(vec((cost_fr .- cost_nr) ./ cost_nr), 0.025)
-    ub_fr = quantile(vec((cost_fr .- cost_nr) ./ cost_nr), 0.975)
-    println("Value of full recourse ($(run_string)): $(round(median_fr*100))% [$(round(lb_fr*100))% - $(round(ub_fr*100))%]")
-
+    if (full_recourse)
+        median_fr = median((cost_fr .- cost_nr) ./ cost_nr)
+        lb_fr = quantile(vec((cost_fr .- cost_nr) ./ cost_nr), 0.025)
+        ub_fr = quantile(vec((cost_fr .- cost_nr) ./ cost_nr), 0.975)
+        println("Value of full recourse ($(run_string)): $(round(median_fr*100))% [$(round(lb_fr*100))% - $(round(ub_fr*100))%]")
+    end
     # Save results
-    CSV.write("$(out_dir)/cost_nr_$(run_string).csv", DataFrame(cost_nr, :auto))
-    CSV.write("$(out_dir)/cost_ar_$(run_string).csv", DataFrame(cost_ar, :auto))
-    CSV.write("$(out_dir)/cost_tr_$(run_string).csv", DataFrame(cost_tr, :auto))
-    CSV.write("$(out_dir)/cost_fr_$(run_string).csv", DataFrame(cost_fr, :auto))
+    if (no_recourse)
+        CSV.write("$(out_dir)/cost_nr_$(run_string).csv", DataFrame(cost_nr, :auto))
+        CSV.write("$(out_dir)/metric_nr_$(run_string).csv", metric_reshape(metric_nr))
+        CSV.write("$(out_dir)/decision_nr_$(run_string).csv", decision_nr)
+    end
 
-    CSV.write("$(out_dir)/metric_nr_$(run_string).csv", metric_reshape(metric_nr))
-    CSV.write("$(out_dir)/metric_ar_$(run_string).csv", metric_reshape(metric_ar))
-    CSV.write("$(out_dir)/metric_tr_$(run_string).csv", metric_reshape(metric_tr))
-    CSV.write("$(out_dir)/metric_fr_$(run_string).csv", metric_reshape(metric_fr))
+    if (add_recourse)
+        CSV.write("$(out_dir)/cost_ar_$(run_string).csv", DataFrame(cost_ar, :auto))
+        CSV.write("$(out_dir)/metric_ar_$(run_string).csv", metric_reshape(metric_ar))
+        CSV.write("$(out_dir)/decision_ar_$(run_string).csv", decision_ar)
+    end
 
-    CSV.write("$(out_dir)/decision_nr_$(run_string).csv", decision_nr)
-    CSV.write("$(out_dir)/decision_ar_$(run_string).csv", decision_ar)
-    CSV.write("$(out_dir)/decision_tr_$(run_string).csv", decision_tr)
-    CSV.write("$(out_dir)/decision_fr_$(run_string).csv", decision_fr)
+    if (terminate_recourse) 
+        CSV.write("$(out_dir)/metric_tr_$(run_string).csv", metric_reshape(metric_tr))
+        CSV.write("$(out_dir)/cost_tr_$(run_string).csv", DataFrame(cost_tr, :auto))
+        CSV.write("$(out_dir)/decision_tr_$(run_string).csv", decision_tr)
+    end
 
-    out_nr = Solution(true, solution_nr.model, solution_nr.x, solution_nr.y, solution_nr.w, cost_nr, metric_nr)
-    out_ar = Solution(true, solution_ar.model, solution_ar.x, solution_ar.y, solution_ar.w, cost_ar, metric_ar)
-    out_tr = Solution(true, solution_tr.model, solution_tr.x, solution_tr.y, solution_tr.w, cost_tr, metric_tr)
-    out_fr = Solution(true, solution_fr.model, solution_fr.x, solution_fr.y, solution_fr.w, cost_fr, metric_fr)
+    if (full_recourse) 
+        CSV.write("$(out_dir)/cost_fr_$(run_string).csv", DataFrame(cost_fr, :auto))
+        CSV.write("$(out_dir)/metric_fr_$(run_string).csv", metric_reshape(metric_fr))
+        CSV.write("$(out_dir)/decision_fr_$(run_string).csv", decision_fr)
+    end
+
+    #out_nr = Solution(true, solution_nr.model, solution_nr.x, solution_nr.y, solution_nr.w, cost_nr, metric_nr)
+    #out_ar = Solution(true, solution_ar.model, solution_ar.x, solution_ar.y, solution_ar.w, cost_ar, metric_ar)
+    #out_tr = Solution(true, solution_tr.model, solution_tr.x, solution_tr.y, solution_tr.w, cost_tr, metric_tr)
+    #out_fr = Solution(true, solution_fr.model, solution_fr.x, solution_fr.y, solution_fr.w, cost_fr, metric_fr)
     #@save "$(out_dir)/solution_$(run_string).jld" out_nr out_ar out_tr out_fr
 end
 
@@ -249,33 +288,40 @@ sp_vec = 2:50
 tt = 6; # [1,2,3,4,5,6,7,8], 2000 - 2070
 tt_vec = 3:5
 kt = 0.25; # [0.1, 0.15, 0.2, 0.25, 0.3]
-kt_vec = [0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.275, 0.3]
+kt_vec = [0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.275]
 ns = 12; # 1:12
-ns_vec = [1,3,2,4,5,6,7,8,9,10,11]
-sdr = 0.01;
-sdr_vec = [0, 0.005, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
+ns_vec = [12,3]
+sdr = 0.02;
+sdr_vec = [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
+deforestation_risk = 0.1
+deforestation_risk_vec = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0]
 dir = "results/mc_sim_mcmc"
 
 println("Starting sensitivity analysis...")
-baseline = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, true)
 
-robust = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, false)
+# Run across all deforestation risk rates
+map((dr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, dr_i), deforestation_risk_vec)
+map((dr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, 1, sdr, dr_i), deforestation_risk_vec)
 
-# Run across all choices of the discount rate
-map((sdr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr_i), sdr_vec)
+baseline = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, true)
+
+robust = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, false)
 
 # Run across all ns, number of scenarios in resolved uncertainty
-map((ns_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns_i, sdr), ns_vec)
+map((ns_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns_i, sdr, deforestation_risk), ns_vec)
+
+# Run across all choices of the discount rate
+map((sdr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr_i, deforestation_risk), sdr_vec)
 
 # Run across different time periods for tt
-map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt_i, kt, 1, sdr), tt_vec)
-map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt_i, kt, ns, sdr), tt_vec)
+map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt_i, kt, 1, sdr, deforestation_risk), tt_vec)
+map((tt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt_i, kt, ns, sdr, deforestation_risk), tt_vec)
 
 # Run across all kt
-map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt_i, 1, sdr), kt_vec)
-map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt_i, ns, sdr), kt_vec)
+map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt_i, 1, sdr, deforestation_risk), kt_vec)
+map((kt_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt_i, ns, sdr, deforestation_risk), kt_vec)
 
 # Run across different sampled properties
-map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp_i, tt, kt, 1, sdr), sp_vec)
-map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp_i, tt, kt, ns, sdr), sp_vec)
+#map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp_i, tt, kt, 1, sdr, deforestation_risk), sp_vec)
+#map((sp_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp_i, tt, kt, ns, sdr, deforestation_risk), sp_vec)
 println("Sensitivity analysis complete.")
