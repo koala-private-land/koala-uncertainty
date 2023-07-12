@@ -23,7 +23,7 @@ Base.@kwdef mutable struct Realisation
     p::AbstractArray
 
     function Realisation(C₁::AbstractArray, C₂::AbstractArray, M₁::AbstractArray, M₂::AbstractArray, area::AbstractArray, deforestation_risk::Float64, p::AbstractArray)
-        τ=(rand(size(C₁, 1)) .< (1-deforestation_risk)) .* 1
+        τ = (rand(size(C₁, 1), length(p)) .< (1-deforestation_risk)) # Deforestation for each scenario
         return (new(C₁, C₂, M₁, M₂, area, deforestation_risk, τ, p))
     end
 end
@@ -287,111 +287,66 @@ function fcn_two_stage_opt_saa_deforestation(realisations=Vector{Realisation}; K
     )
 end
 
-# function fcn_two_stage_opt_robust(realisations::Realisation; Ω::AbstractFloat=sqrt(2*log(1/0.1))*sqrt(size(realisations.C₁,1)), K::Real=7000, β::Real=0, γ::Real=0, add_recourse=true, terminate_recourse=true)
-#     # Solve the deterministic equivalent of the two-stage problem with sample average approximation
-#     # The conservation targets must be reached robustly
+function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000, add_recourse=true, terminate_recourse=true, ns::Integer=1, baseline_conditions=false)
+    # Solve the deterministic equivalent of the two-stage problem with sample average approximation
+    # In contrast to the SAA approach, this approach assumes that the decision maker knows the bids of landholders for certain
 
-#     # Arguments
-#     # realisations: a vector of Realisations
-#     # K: management objective
+    # Arguments
+    # realisation: a single realisation
+    # K: management objective
+    # add_recourse: whether to allow recourse to adding units in the second stage
+    # terminate_recourse: whether to allow recourse to terminating units in the second stage
+    # ns: number of scenarios in each resolution of uncertainty
 
-#     N, S = get_properties(realisations) # N: number of units, S: number of climate scenarios
-#     model = Model(Gurobi.Optimizer)
-#     #set_silent(model)
-#     @variable(model, 0 <= x[1:N] <= 1) # First stage decision
-#     @variable(model, y[1:N, 1:S]) # Second stage decision: adding units
-#     @variable(model, w[1:N, 1:S]) # Second stage decision: terminating units
-#     @variable(model, z) # Worst-case costs across all cost realisations
-#     @objective(model, Min, z)
+    N, S = get_properties(realisation) # N: number of units, S: number of climate scenarios
+    s_vec = fcn_resolve_scenario_incomplete(ns)
 
-#     if (add_recourse)
-#         @constraint(model, 0 .<= y .<= 1) # Second stage decision: adding units    
-#     else
-#         for i = 1:N
-#             for s = 1:S
-#                 fix(y[i,s], 0);
-#             end
-#         end
-#     end
+    model = Model(Gurobi.Optimizer)
+    set_silent(model)
+    @variable(model, 0 <= x[1:N] <= 1) # First stage decision
+    @variable(model, z) # Worst-case costs across all cost realisations
+    @objective(model, Min, z)
 
-#     if (terminate_recourse)
-#         @constraint(model, 0 .<= w .<= 1) # Second stage decision: terminating units
-#     else
-#         for i = 1:N
-#             for s = 1:S
-#                 fix(w[i,s], 0);
-#             end
-#         end
-#     end
+    # Destructure realisation
+    (; C₁, C₂, M₁, M₂, p, τ) = realisation
 
-#     C₁ = realisations.C₁ #.* realisations[j].A # First-stage cost under the J-th realisation
-#     C₂ = realisations.C₂ #.* realisations[j].A # Second-stage cost under the J-th realisation
-#     M₁ = realisations.M₁ #.* realisations[j].A
-#     M₂ = realisations.M₂ #.* realisations[j].A
-#     p = realisations.p  # Climate scenario probabilities
+    # Objective is to minimise costs, z
+    @constraint(model, z >= sum((C₁ .+ C₂)' * x) + sum(p[s] * sum((add_recourse ? C₂[i] * y[i, s] : 0) + (terminate_recourse ? C₂[i] * w[i, s] : 0) for i in 1:N) for s in 1:S))
 
-#     # Objective is to minimise the worst-case (highest) costs, z
-#     @constraint(model, z >= sum((C₁ .+ C₂)' * x) + sum(p[s] * sum((β + C₂[i]) * y[i, s] + (γ - C₂[i]) * w[i, s] for i in 1:N) for s in 1:S))
+    if (add_recourse)
+        @variable(model, 0 <= y[i = 1:N, s = 1:S] <= τ[i,s]) # Second stage decision: adding units, cleared land cannot be protected in the second stage
+        @constraint(model, [i in 1:N, s in 1:S], x[i] + y[i, s] <= 1)
+    end
 
-#     if !isdefined(Ω, :num)
-#         ϵ = 0.1; # 10% chance of violating the constraint
-#         Ω = sqrt(2 * log(1 / ϵ))*sqrt(N);
-#         println("Omega not assigned, using default value of $Ω for $((1-ϵ)*100)% probabilistic guarantee")
-#     end
+    if (terminate_recourse)
+        @variable(model, 0 <= w[1:N, 1:S] <= 1) # Second stage decision: terminating units
+        @constraint(model, [i in 1:N, s in 1:S], x[i] - w[i, s] >= 0)
+    end
 
-#     # Objective must be reached across all climate realisations before climate is known
-#     @uncertain(model, M₁_z[1:N, 1:size(M₁,2), 1:S])
+    if (baseline_conditions)
+        # Conservation goals only need to met under baseline conditions (i.e. third time step)
+        @constraint(model, [s in 1:S], M₁[:, 3, s]' * x .>= K)
+    else
+        # Objective must be reached across all climate realisations before climate is known
+        @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K)
 
-#     for t in axes(M₁, 2)
-#         for s in 1:S
-#             @constraint(model, ((M₁[:, t, s] .* M₁_z[:, t, s])' * x) >= K)
-#             @constraint(model, norm(M₁_z[:, t, s], 1) <= Ω)
-#             @constraint(model, norm(M₁_z[:, t, s], Inf) <= 1)
-#         end
-#     end
+        # After uncertainty is revealed, the objective only needs to be met at that scenario
+        @constraint(model, [t in axes(M₂, 2), s in 1:S], M₂[:, t, s_vec[s]]' * (x .+ (add_recourse ? y[:, s] : 0) .- (terminate_recourse ? w[:, s] : 0)) .>= K)
+    end
 
-#     # After uncertainty is revealed, the objective only needs to be met at that realised climate realisation
-#     @variable(model, M₂_z[1:N, 1:size(M₂,2), 1:S])
-#     for t in axes(M₂, 2)
-#         for s = 1:S
-#             @constraint(model, (M₂[:, t, s] .* M₂_z[:, t, s])' * (x + y[:, s] - w[:, s]) >= K)
-#             @constraint(model, norm(M₂_z[:, t, s], 1) <= Ω)
-#             @constraint(model, norm(M₂_z[:, t, s], Inf) <= 1)
-#         end
-#     end
-
-
-#     if (add_recourse)
-#         for i = 1:N
-#             for s = 1:S
-#                 @constraint(model, x[i] + y[i, s] <= 1)
-#             end
-#         end
-#     end
-
-#     if (terminate_recourse)
-#         for i = 1:N
-#             for s = 1:S
-#                 @constraint(model, x[i] - w[i, s] >= 0)
-#             end
-#         end
-#     end
-#     return(model)
-#     #optimize!(model)
-
-#     #return (
-#     #    model=model,
-#     #    obj_value=objective_value(model),
-#     #    x=value.(x),
-#     #    y=value.(y),
-#     #    w=value.(w)
-#     #)
-# end
+    optimize!(model)
+    return (
+        model=model,
+        obj_value=objective_value(model),
+        x=value.(x),
+        y=(add_recourse ? value.(y) : zeros(N, S)),
+        w=(terminate_recourse ? value.(w) : zeros(N, S))
+    )
+end
 
 function fcn_evaluate_solution(model::Model, realisations::Vector{Realisation})
     # model: Solved JuMP model
     # realisations: a vector of realisations
-
 
     J = length(realisations)
     N, S = get_properties(realisations[1])
@@ -417,6 +372,43 @@ function fcn_evaluate_solution(model::Model, realisations::Vector{Realisation})
     return (cost_mat, metric_mat)
 end
 
+function fcn_evaluate_solution(model::Vector{Model}, realisations::Vector{Realisation})
+    # model: a vector of solved JuMP models
+    # realisations: a vector of realisations, each realisation corresponds to each model by index
+
+    if (length(model) != length(realisations))
+        error("The number of models and realisations must be equal")
+    end
+
+    J = length(realisations)
+    
+    N, S = get_properties(realisations[1])
+    T = size(realisations[1].M₁, 2) + size(realisations[1].M₂, 2)
+    
+    cost_mat = zeros(S, J)
+    metric_mat = zeros(S, T, J)
+
+    function fcn_evaluate_solution_model(model::Model, r::Realisation)
+        x = value.(model[:x])
+        y = haskey(model, :y) ? value.(model[:y]) : zeros(N, S)
+        w = haskey(model, :w) ? value.(model[:w]) : zeros(N, S)
+
+        cost = [sum(r.C₁'*x + r.C₂'*(x + y[:, s] - w[:, s])) for s = 1:S]
+        metric_1 = mapreduce(permutedims, vcat, [r.M₁[:, :, s]' * x for s = 1:S])'
+        metric_2 = mapreduce(permutedims, vcat, [r.M₂[:, :, s]' * (x + y[:, s] - w[:, s]) for s = 1:S])'
+        metric = vcat(metric_1, metric_2)
+        return (cost, metric)
+    end
+
+    for j=1:J
+        (cost, metric) = fcn_evaluate_solution_model(model[j], realisation[j])
+        cost_mat[:, j] = cost
+        metric_mat[:, :, j] = metric'
+    end
+
+    return (cost_mat, metric_mat)
+end
+
 
 function fcn_resolve_scenario_incomplete(ns::Integer=2; S::Integer=12, N::Integer=12)
     # S: Number of possible resolutions of uncertainty
@@ -433,3 +425,18 @@ function fcn_resolve_scenario_incomplete(ns::Integer=2; S::Integer=12, N::Intege
     end
 end
 
+function fcn_tidy_two_stage_solution_sum(solution::Solution, prop_id)
+    out = hcat(prop_id, solution.x, sum(solution.y, dims=2), sum(solution.w, dims=2))
+    colnames = vcat(["NewPropID"; "x"; "sum_y"; "sum_w"])
+    return DataFrame(out, colnames)
+end
+
+function fcn_tidy_two_stage_solution_sum(models::Vector{Model}, prop_id)
+    x = mapreduce(permutedims, mean, [value.(model[:x]) for model in models])
+    y = mapreduce(permutedims, mean, [haskey(model, :y) ? value.(model[:y]) : zeros(N, S) for model in models])
+    w = mapreduce(permutedims, mean, [haskey(model, :w) ? value.(model[:w]) : zeros(N, S) for model in models])
+
+    out = hcat(prop_id, x, sum(y, dims=2), sum(w, dims=2))
+    colnames = vcat(["NewPropID"; "x"; "sum_y"; "sum_w"])
+    return DataFrame(out, colnames)
+end
