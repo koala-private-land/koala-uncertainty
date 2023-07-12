@@ -28,6 +28,17 @@ Base.@kwdef mutable struct Realisation
     end
 end
 
+mutable struct Solution
+    feasible::Bool
+    model::Model
+    x::AbstractArray
+    y::AbstractArray
+    w::AbstractArray
+    cost::AbstractArray
+    metric::AbstractArray
+end
+
+
 function get_properties(r::Realisation)
     N = size(r.C₁, 1)
     S = size(r.M₂, 3)
@@ -310,30 +321,31 @@ function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000,
     # Destructure realisation
     (; C₁, C₂, M₁, M₂, p, τ) = realisation
 
-    # Objective is to minimise costs, z
-    @constraint(model, z >= sum((C₁ .+ C₂)' * x) + sum(p[s] * sum((add_recourse ? C₂[i] * y[i, s] : 0) + (terminate_recourse ? C₂[i] * w[i, s] : 0) for i in 1:N) for s in 1:S))
-
+    
     if (add_recourse)
         @variable(model, 0 <= y[i = 1:N, s = 1:S] <= τ[i,s]) # Second stage decision: adding units, cleared land cannot be protected in the second stage
         @constraint(model, [i in 1:N, s in 1:S], x[i] + y[i, s] <= 1)
     end
-
+    
     if (terminate_recourse)
         @variable(model, 0 <= w[1:N, 1:S] <= 1) # Second stage decision: terminating units
         @constraint(model, [i in 1:N, s in 1:S], x[i] - w[i, s] >= 0)
     end
-
+    
     if (baseline_conditions)
         # Conservation goals only need to met under baseline conditions (i.e. third time step)
         @constraint(model, [s in 1:S], M₁[:, 3, s]' * x .>= K)
     else
         # Objective must be reached across all climate realisations before climate is known
         @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K)
-
+        
         # After uncertainty is revealed, the objective only needs to be met at that scenario
         @constraint(model, [t in axes(M₂, 2), s in 1:S], M₂[:, t, s_vec[s]]' * (x .+ (add_recourse ? y[:, s] : 0) .- (terminate_recourse ? w[:, s] : 0)) .>= K)
     end
-
+    
+    # Objective is to minimise costs, z
+    @constraint(model, z >= sum((C₁ .+ C₂)' * x) + sum(p[s] * sum((add_recourse ? C₂[i] * y[i, s] : 0) + (terminate_recourse ? C₂[i] * w[i, s] : 0) for i in 1:N) for s in 1:S))
+    
     optimize!(model)
     return (
         model=model,
@@ -401,7 +413,7 @@ function fcn_evaluate_solution(model::Vector{Model}, realisations::Vector{Realis
     end
 
     for j=1:J
-        (cost, metric) = fcn_evaluate_solution_model(model[j], realisation[j])
+        (cost, metric) = fcn_evaluate_solution_model(model[j], realisations[j])
         cost_mat[:, j] = cost
         metric_mat[:, :, j] = metric'
     end
@@ -432,11 +444,12 @@ function fcn_tidy_two_stage_solution_sum(solution::Solution, prop_id)
 end
 
 function fcn_tidy_two_stage_solution_sum(models::Vector{Model}, prop_id)
-    x = mapreduce(permutedims, mean, [value.(model[:x]) for model in models])
-    y = mapreduce(permutedims, mean, [haskey(model, :y) ? value.(model[:y]) : zeros(N, S) for model in models])
-    w = mapreduce(permutedims, mean, [haskey(model, :w) ? value.(model[:w]) : zeros(N, S) for model in models])
+    N = length(value.(models[1][:x]));
+    x = mapreduce(permutedims, vcat, [value.(model[:x]) for model in models])
+    y = mapreduce(permutedims, vcat, [haskey(model, :y) ? sum(value.(model[:y]), dims=2) : zeros(N, 1) for model in models])
+    w = mapreduce(permutedims, vcat, [haskey(model, :w) ? sum(value.(model[:w]), dims=2) : zeros(N, 1) for model in models])
 
-    out = hcat(prop_id, x, sum(y, dims=2), sum(w, dims=2))
-    colnames = vcat(["NewPropID"; "x"; "sum_y"; "sum_w"])
+    out = hcat(prop_id, x', y', w')
+    colnames = vcat(["NewPropID"; ["x$(i)" for i in range(1,length(models))]; ["sum_y$(i)" for i in range(1,length(models))]; ["sum_w$(i)" for i in range(1,length(models))]])
     return DataFrame(out, colnames)
 end

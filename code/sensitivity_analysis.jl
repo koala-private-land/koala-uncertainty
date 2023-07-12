@@ -32,19 +32,10 @@ coefs_y = [Matrix(CSV.read("data/model_matrix/CoefsY.Inf_$i.csv", DataFrame, hea
 coefs_z = [Matrix(CSV.read("data/model_matrix/CoefsZ.Inf_$i.csv", DataFrame, header=false)) for i in 1:10];
 
 # Constants
-R = 100; # Total number of uncertainty realisations
-rr = 12; # Sampled realisations
+R = 10; # Total number of uncertainty realisations
+rr = 10; # Sampled realisations
 K = 7000; # Habitat protection goal
 
-mutable struct Solution
-    feasible::Bool
-    model::Model
-    x::AbstractArray
-    y::AbstractArray
-    w::AbstractArray
-    cost::AbstractArray
-    metric::AbstractArray
-end
 
 # Cost to time series
 function cost_to_ts(cost::AbstractVector, area::AbstractVector, prop::AbstractVector, idx_before::AbstractVector=1:30, idx_after::AbstractVector=31:60, discount_rate::AbstractFloat= 0.02, perpetuity::Bool=true)
@@ -175,7 +166,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     (no_recourse, add_recourse, terminate_recourse, full_recourse) = recourses
 
     if (baseline_conditions && no_recourse)
-        solution_nr_vec = fcn_two_stage_opt_deforestation(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=false, baseline_conditions=true)
+        solution_nr_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=7000, ns=ns, terminate_recourse=false, add_recourse=false, baseline_conditions=true) for r in 1:R]
         models_nr_vec = [soln.model for soln in solution_nr_vec]
         (cost_nr, metric_nr) = fcn_evaluate_solution(models_nr_vec, realisations)
         CSV.write("$(out_dir)/cost_baseline_$(run_string).csv", DataFrame(cost_nr, :auto))
@@ -183,7 +174,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
         decision_nr = fcn_tidy_two_stage_solution_sum(models_nr_vec, out_propid)
         CSV.write("$(out_dir)/decision_baseline_$(run_string).csv", decision_nr)
         #@save "$(out_dir)/solution_baseline_$(run_string).jld" out_nr
-        return out_nr
+        return
     end
 
     #if (isfile("$(out_dir)/decision_ar_$(run_string).csv"))
@@ -197,7 +188,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     end
 
     if (no_recourse) 
-        solution_nr_vec = fcn_two_stage_opt_deforestation(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=false)
+        solution_nr_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=7000, ns=ns, terminate_recourse=false, add_recourse=false) for r in 1:R]
         models_nr_vec = [soln.model for soln in solution_nr_vec]
         (cost_nr, metric_nr) = fcn_evaluate_solution(models_nr_vec, realisations)
         decision_nr = fcn_tidy_two_stage_solution_sum(models_nr_vec, out_propid)
@@ -207,7 +198,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     end
 
     if (add_recourse) 
-        solution_ar_vec = fcn_two_stage_opt_deforestation(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=false, add_recourse=true)
+        solution_ar_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=7000, ns=ns, terminate_recourse=false, add_recourse=true) for r in 1:R]
         models_ar_vec = [soln.model for soln in solution_ar_vec]
         (cost_ar, metric_ar) = fcn_evaluate_solution(models_ar_vec, realisations)
         decision_ar = fcn_tidy_two_stage_solution_sum(models_ar_vec, out_propid)
@@ -221,7 +212,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     end
 
     if (terminate_recourse) 
-        solution_tr_vec = fcn_two_stage_opt_deforestation(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=true, add_recourse=false)
+        solution_tr_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=7000, ns=ns, terminate_recourse=true, add_recourse=false) for r in 1:R]
         models_tr_vec = [soln.model for soln in solution_tr_vec]
         (cost_tr, metric_tr) = fcn_evaluate_solution(models_tr_vec, realisations)
         decision_tr = fcn_tidy_two_stage_solution_sum(models_tr_vec, out_propid)
@@ -231,7 +222,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     end
 
     if (full_recourse) 
-        solution_fr_vec = fcn_two_stage_opt_deforestation(realisations[1:rr]; K=7000, ns=ns, terminate_recourse=true, add_recourse=true)
+        solution_fr_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=7000, ns=ns, terminate_recourse=true, add_recourse=true) for r in 1:R]
         models_fr_vec = [soln.model for soln in solution_fr_vec]
         (cost_fr, metric_fr) = fcn_evaluate_solution(solution_fr.model, realisations)
         decision_fr = fcn_tidy_two_stage_solution_sum(solution_fr, out_propid)
@@ -243,7 +234,6 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
         CSV.write("$(out_dir)/metric_fr_$(run_string).csv", metric_reshape(metric_fr))
         CSV.write("$(out_dir)/decision_fr_$(run_string).csv", decision_fr)
     end
-    
 end
 
 ## Start sensitivity analysis
@@ -256,7 +246,7 @@ tt_vec = 3:5
 kt = 0.25; # [0.1, 0.15, 0.2, 0.25, 0.3]
 kt_vec = [0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.275]
 ns = 12; # 1:12
-ns_vec = [12,3]
+ns_vec = [1,3]
 sdr = 0.02;
 sdr_vec = [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
 deforestation_risk = 0.1
@@ -265,16 +255,18 @@ dir = "results/mc_sim_mcmc"
 
 println("Starting sensitivity analysis...")
 
+# Ignore uncertainty
+fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, true)
 
-baseline = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, true)
+# Inflexible
+fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, false)
 
-robust = fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, false)
+# Run across all ns, number of scenarios in resolved uncertainty
+map((ns_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns_i, sdr, deforestation_risk), ns_vec)
 
 # Run across all deforestation risk rates
 map((dr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, dr_i), deforestation_risk_vec)
 map((dr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, 1, sdr, dr_i), deforestation_risk_vec)
-# Run across all ns, number of scenarios in resolved uncertainty
-map((ns_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns_i, sdr, deforestation_risk), ns_vec)
 
 # Run across all choices of the discount rate
 map((sdr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr_i, deforestation_risk), sdr_vec)
