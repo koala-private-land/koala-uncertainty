@@ -22,7 +22,7 @@ dr = 0.1
 
 
 flexibility_differences <- function(recourse = c(T,T,F,F), loop_vec = 1:10, params = c(sp, tt, kt, ns, rr, sdr, dr), dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
-  base_string <- "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s"
+  base_string <- "run_exp_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s"
   cost_diff_pct <- lapply(loop_vec, function(x) {
     vec_var <- params
     vec_var[dep_var] <- x
@@ -109,7 +109,7 @@ plot_list <- list()
 for (i in 1:length(scen_list)) {
   scen_list_i <- scen_list[1:i]
 
-  get_run_string <- function(param=default) do.call(sprintf, c(fmt = "run_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s", as.list(param)))
+  get_run_string <- function(param=default) do.call(sprintf, c(fmt = "run_exp_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s", as.list(param)))
   baseline_string <- get_run_string(c(sp, tt, kt, ns, rr, sdr, dr))
   robust_string   <- get_run_string(c(sp, tt, kt, ns, rr, sdr, dr))
   flexible_string <- get_run_string(c(sp, tt, kt, ns, rr, sdr, dr))
@@ -172,10 +172,10 @@ for (i in 1:length(scen_list)) {
     theme(axis.line.x = element_blank())
   
   ## Import decision vectors
-  baseline_decisions <- read_csv(paste0(results_dir, "decision_baseline_", baseline_string, ".csv"), col_types = cols())  %>% mutate(y = sum_y / 12, w = sum_w / 12)
-  robust_decisions <- read_csv(paste0(results_dir, "decision_nr_", robust_string, ".csv"), col_types = cols()) %>% mutate(y = sum_y / 12, w = sum_w / 12)
-  flexible_decisions <- read_csv(paste0(results_dir, 'decision_ar_', flexible_string, ".csv"), col_types = cols()) %>% mutate(y = sum_y / 12, w = sum_w / 12)
-  flexible_learning_decisions <- read_csv(paste0(results_dir, 'decision_ar_', flexible_learning_string, ".csv"), col_types = cols()) %>% mutate(y = sum_y / 12, w = sum_w / 12)
+  baseline_decisions <- read_csv(paste0(results_dir, "decision_baseline_", baseline_string, ".csv"), col_types = cols()) %>% mutate(x = x1, sum_y = sum_y1, sum_x = sum_x1) %>% mutate(y = sum_y / 12, w = sum_w / 12)
+  robust_decisions <- read_csv(paste0(results_dir, "decision_nr_", robust_string, ".csv"), col_types = cols()) %>% mutate(x = x1, sum_y = sum_y1, sum_x = sum_x1) %>% mutate(y = sum_y / 12, w = sum_w / 12)
+  flexible_decisions <- read_csv(paste0(results_dir, 'decision_ar_', flexible_string, ".csv"), col_types = cols()) %>% mutate(x = x1, sum_y = sum_y1, sum_x = sum_x1) %>% mutate(y = sum_y / 12, w = sum_w / 12)
+  flexible_learning_decisions <- read_csv(paste0(results_dir, 'decision_ar_', flexible_learning_string, ".csv"), col_types = cols()) %>% mutate(x = x1, sum_y = sum_y1, sum_x = sum_x1) %>% mutate(y = sum_y / 12, w = sum_w / 12)
   
   ## Total conservation costs
   baseline_costs <- read_csv(paste0(results_dir, "cost_baseline_", baseline_string, ".csv"), col_types = cols())
@@ -510,14 +510,21 @@ plot_line_diff <- function(summary_diff_pct, dodge_width = 0.0005, connect = T) 
 full_learning <- c(1,6,0.25,1,12,0.02,0.1)
 no_learning <- c(1,6,0.25,12,12,0.02,0.1)
 
-dr_vec <- c("0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0")
+dr_vec <- seq(0.05,1,0.05) %>%
+  sapply(function(x) format(round(x, 2), nsmall = 1))
 dr_flex_diff <- list(
   no = flexibility_differences(params = no_learning, loop_vec = dr_vec, dep_var = 7),
   full = flexibility_differences(params = full_learning, loop_vec = dr_vec, dep_var = 7)
   ) %>%
   bind_rows(.id = "learning")
 
-plot_line_diff(dr_flex_diff %>% filter(learning == 'no'))
+dr_flex_diff %>%
+  ggplot(aes(color = learning, fill = learning, x = as.numeric(name))) +
+  geom_point(aes(y = -median), position=position_dodge(width=0.02)) +
+  geom_errorbar(aes(x=as.numeric(name), ymin = -lb, ymax = -ub), width = 0.02, position=position_dodge(width=0.02)) + 
+  scale_y_reverse("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%")) +
+  ggsci::scale_color_d3() +
+  ggpubr::theme_pubr()
 
 sp_flex_diff <- list(
   full = flexibility_differences(params = full_learning, loop_vec = 1:10, dep_var = 1),
