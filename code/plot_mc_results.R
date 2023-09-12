@@ -7,6 +7,8 @@ library(patchwork)
 library(geodata)
 library(sf)
 library(nngeo)
+library(ggthemes)
+library(ggplotify)
 
 results_dir <- "results/mc_sim_mcmc/"
 #results_dir <- "~/Documents/OneDrive - The University of Queensland/Documents/GitHub/koala-uncertainty/results/mc_sim/"
@@ -20,6 +22,17 @@ rr = 10
 sdr = 0.02
 dr = 0.1
 
+colorpal <- c("#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#D55E00", "#F0E442" ,"#0072B2")
+
+# Fill
+scale_fill_colorblind7 = function(...){
+  scale_fill_discrete(..., type = colorpal)
+}
+
+# Color
+scale_color_colorblind7 = function(...){
+  scale_color_discrete(..., type = colorpal)
+}
 
 flexibility_differences <- function(recourse = c(T,T,F,F), loop_vec = 1:10, params = c(sp, tt, kt, ns, rr, sdr, dr), dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
   base_string <- "run_exp_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s"
@@ -79,9 +92,7 @@ prop_df <- st_drop_geometry(prop_centroid) %>%
 ## Spatial plots
 aus_border <- gadm(country = "AUS", level = 1, path = "data/", resolution = 2) %>%
   sf::st_as_sf()
-nsw_lga <- st_read( "data/planning_units.gdb", layer = 'nsw_lga_pu_all') %>%
-  st_transform(4326) %>%
-  st_simplify(preserveTopology = T, dTolerance = 2000)
+nsw_lga <- st_read( "data/planning_units.gdb", layer = 'nsw_lga_pu_all')
 nsw_lga_union <- nsw_lga%>%
   st_union() %>%
   nngeo::st_remove_holes()
@@ -91,10 +102,15 @@ aus_xlim <- c(113.338953078, 153.569469029)
 aus_ylim <- c(-43.6345972634,-10.6681857235)
 saveRDS(list(aus_border=aus_border, nsw_bbox=nsw_bbox, nsw_lga_union=nsw_lga_union), file = 'plots/shapes.rds')
 
+prop_lga <- st_join(prop_centroid, nsw_lga)
+prop_lga_lookup <- prop_lga %>% 
+  st_drop_geometry() %>%
+  select(NewPropID, NSW_LGA__2)
+
 aus_plot <- ggplot() +
   geom_sf(data = aus_border, fill = 'gray80', color = 'white') +
   geom_rect(aes(xmin = nsw_bbox$xmin - bbox_buffer, xmax = nsw_bbox$xmax + bbox_buffer, ymin = nsw_bbox$ymin - bbox_buffer, ymax = nsw_bbox$ymax + bbox_buffer), fill = NA, color = 'gray50') +
-  geom_sf(data = nsw_lga_union, linewidth = 0.5, color = NA, fill = '#FFD580') +
+  geom_sf(data = nsw_lga_union, size = 0.5, color = NA, fill = '#FFD580') +
   coord_sf(xlim = aus_xlim, ylim = aus_ylim) +
   theme_void()
 #theme_bw() +
@@ -103,10 +119,25 @@ aus_plot <- ggplot() +
 
 spatial_pred <- read_csv('data/spatial_predictions_10yr.csv')
 
-scen_list <- c('CC', 'RI', 'F', 'F+L')
+scen_list <- c('Ignore Climate Change', 'Inflexible', 'Flexible', 'Flexible & Learning')
 plot_list <- list()
 
-for (i in 1:length(scen_list)) {
+
+
+fcn_decision_set <- function(a,b,area) {
+  # Set of decisions
+  x_str <- paste0("x", 1:10)
+  ax <- a[x_str]
+  bx <- b[x_str]
+  u_idx <- ax * bx # union
+  u <- colSums(u_idx * area)
+  ao <- colSums(ax * (u_idx<0.01) * area)
+  bo <- colSums(bx * (u_idx<0.01) * area)
+  area_sum <- u+ao+bo
+  return(data.frame(u=u,a=ao,b=bo))
+}
+
+for (i in 4:length(scen_list)) {
   scen_list_i <- scen_list[1:i]
 
   get_run_string <- function(param=default) do.call(sprintf, c(fmt = "run_exp_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s", as.list(param)))
@@ -142,15 +173,15 @@ for (i in 1:length(scen_list)) {
     ggplot(aes(x=year)) +
     geom_hline(yintercept = 7000) +
     geom_vline(xintercept = 2020, linetype = 2, color = 'gray50') +
-    geom_vline(xintercept = year_vec[tt], linetype = 2, color = 'gray50') +
+    geom_vline(xintercept = year_vec[tt]-5, linetype = 2, color = 'gray50') +
     geom_ribbon(aes(ymin = lb, ymax = ub, fill = model), alpha = 0.25) +
-    geom_line(aes(y = median, color = model), linewidth = 1) +
+    geom_line(aes(y = median, color = model), size = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
-    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% c('F','F+L')), aes(y = median, color = model), size = 2)+
+    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% c('Flexible','Flexible & Learning')), aes(y = median, color = model), size = 2)+
     scale_y_continuous("Koala habitat (ha)") +
     scale_x_continuous("Year") +
-    ggsci::scale_color_nejm() +
-    ggsci::scale_fill_nejm() +
+    scale_color_colorblind7() +
+    scale_fill_colorblind7() +
     coord_cartesian(xlim = c(2020,2070), ylim = c(0, 15000)) +
     guides(color = 'none', fill = 'none')+
     ggpubr::theme_pubr()
@@ -162,20 +193,28 @@ for (i in 1:length(scen_list)) {
     ggplot(aes(x = name_num, y = median, fill = model)) +
     geom_hline(yintercept = 7000) +
     geom_rect(aes(ymin = lb, ymax = ub, xmin = name_num - 0.4, xmax = name_num + 0.4))+
-    geom_segment(aes(y = median, yend = median, x = name_num-0.4, xend = name_num+0.4), color = 'white', linewidth = 1) +
+    geom_segment(aes(y = median, yend = median, x = name_num-0.4, xend = name_num+0.4), color = 'white', size = 1) +
     #geom_text(aes(y = 0, x = name_num, label = model, color = model), size = 4, vjust = 0.5) +
     coord_cartesian(ylim = c(0, 15000)) +
     guides(color = 'none') +
-    ggsci::scale_fill_nejm() +
-    ggsci::scale_color_nejm() +
+    scale_fill_colorblind7("Strategy") +
+    scale_color_colorblind7("Strategy") +
     theme_void() +
     theme(axis.line.x = element_blank())
   
   ## Import decision vectors
-  baseline_decisions <- read_csv(paste0(results_dir, "decision_baseline_", baseline_string, ".csv"), col_types = cols()) %>% mutate(x = x1, sum_y = sum_y1, sum_x = sum_x1) %>% mutate(y = sum_y / 12, w = sum_w / 12)
-  robust_decisions <- read_csv(paste0(results_dir, "decision_nr_", robust_string, ".csv"), col_types = cols()) %>% mutate(x = x1, sum_y = sum_y1, sum_x = sum_x1) %>% mutate(y = sum_y / 12, w = sum_w / 12)
-  flexible_decisions <- read_csv(paste0(results_dir, 'decision_ar_', flexible_string, ".csv"), col_types = cols()) %>% mutate(x = x1, sum_y = sum_y1, sum_x = sum_x1) %>% mutate(y = sum_y / 12, w = sum_w / 12)
-  flexible_learning_decisions <- read_csv(paste0(results_dir, 'decision_ar_', flexible_learning_string, ".csv"), col_types = cols()) %>% mutate(x = x1, sum_y = sum_y1, sum_x = sum_x1) %>% mutate(y = sum_y / 12, w = sum_w / 12)
+  baseline_decisions <- read_csv(paste0(results_dir, "decision_baseline_", baseline_string, ".csv"), col_types = cols()) %>% 
+    mutate(x = x1, sum_y = sum_y1, sum_w = sum_w1) %>% 
+    mutate(y = sum_y / 12, w = sum_w / 12)
+  robust_decisions <- read_csv(paste0(results_dir, "decision_nr_", robust_string, ".csv"), col_types = cols()) %>% 
+    mutate(x = x1, sum_y = sum_y1, sum_w = sum_w1) %>% 
+    mutate(y = sum_y / 12, w = sum_w / 12)
+  flexible_decisions <- read_csv(paste0(results_dir, 'decision_ar_', flexible_string, ".csv"), col_types = cols()) %>% 
+    mutate(x = x1, sum_y = sum_y1, sum_w = sum_w1) %>% 
+    mutate(y = sum_y / 12, w = sum_w / 12)
+  flexible_learning_decisions <- read_csv(paste0(results_dir, 'decision_ar_', flexible_learning_string, ".csv"), col_types = cols()) %>% 
+    mutate(x = x1, sum_y = sum_y1, sum_w = sum_w1) %>% 
+    mutate(y = sum_y / 12, w = sum_w / 12) 
   
   ## Total conservation costs
   baseline_costs <- read_csv(paste0(results_dir, "cost_baseline_", baseline_string, ".csv"), col_types = cols())
@@ -254,19 +293,19 @@ for (i in 1:length(scen_list)) {
     filter(model %in% scen_list_i) %>%
     ggplot(aes(x = year)) +
     geom_vline(xintercept = 2020, linetype = 2, color = 'gray50') +
-    geom_vline(xintercept = year_vec[tt], linetype = 2, color = 'gray50') +
+    geom_vline(xintercept = year_vec[tt]-5, linetype = 2, color = 'gray50') +
     geom_ribbon(aes(fill = model, ymin = lb, ymax = ub), alpha = 0.25) +
-    geom_line(data = offered_area, aes(color = model, y = area), linewidth = 1) +
+    geom_line(aes(color = model, y = median), size = 1) +
     #geom_line(aes(color = model, y = median)) +
-    scale_y_continuous("Covenant offers/ \nyield (ha)") +
+    scale_y_continuous("Covenant area (ha)") +
     scale_x_continuous("Year") +
-    ggsci::scale_color_nejm() +
-    ggsci::scale_fill_nejm() +
-    coord_cartesian(xlim = c(2020,2070), ylim = c(3000, 23000)) +
+    scale_color_colorblind7() +
+    scale_fill_colorblind7() +
+    coord_cartesian(xlim = c(2020,2070), ylim = c(3000, 15000)) +
     guides(color = 'none', fill = 'none')+
     ggpubr::theme_pubr() +
-    annotate('text', x = mean(c(year_vec[3], year_vec[tt])), y = 22000, color = 'black', label = 'Stage 1') +
-    annotate('text', x = mean(c(year_vec[tt], year_vec[length(year_vec)])) , y = 22000, color = 'black', label = 'Stage 2') +
+    annotate('text', x = mean(c(year_vec[3], year_vec[tt]-5)), y = 15000, color = 'black', label = 'Stage 1', vjust=1) +
+    annotate('text', x = mean(c(year_vec[tt]-5, year_vec[length(year_vec)])) , y = 15000, color = 'black', label = 'Stage 2', vjust=1) +
     theme(axis.title.x = element_blank(),
           axis.line.x = element_blank(),
           axis.ticks.x = element_blank(),
@@ -275,6 +314,49 @@ for (i in 1:length(scen_list)) {
   offered_area_end <- offered_area %>%
     mutate(name_num = as.numeric(model)) %>%
     filter(year == 2070)
+  
+  covenanted_area_stages <- list(baseline = baseline_area_ts, robust = robust_area_ts, flexible = flexible_area_ts, flexible_learning = flexible_learning_area_ts) %>%
+    bind_rows(.id = 'model') %>%
+    pivot_wider(names_from = 'stat', values_from = 'area') %>%
+    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
+    filter(year %in% c(2020,2070)) %>%
+    filter(model %in% scen_list_i) %>%
+    mutate(name_num = as.numeric(as.factor(model))) %>%
+    mutate(stage = factor(year, c(2020,2070), c('Stage 1', 'Stage 2'))) %>%
+    mutate(stage_num = ifelse(stage == 'Stage 1', 1, 2)) %>%
+    mutate(xmin = stage_num + (name_num-2.5)*.2- 0.05, xmax = stage_num + (name_num-2.5)*.2 + 0.05) 
+  
+  covenanted_area_ref <- covenanted_area_stages %>%
+    filter(stage == 'Stage 1' & model %in% c('Flexible', 'Flexible & Learning')) %>%
+    mutate(xmin = xmin + 1, xmax = xmax + 1)
+  
+  covenanted_area_ref2 <- covenanted_area_stages %>%
+    filter(model %in% c('Flexible', 'Flexible & Learning')) %>%
+    mutate(xmin = xmin + 1, xmax = xmax + 1)
+  
+  covenanted_area_stages_plot <- covenanted_area_stages %>%
+    ggplot(aes(x = stage_num, y = median, color = model)) +
+    geom_rect(aes(fill = model, ymin = lb, ymax = ub, xmin = xmin, xmax = xmax)) +
+    geom_segment(aes(y = median, yend = median, x = xmin-0.01, xend = xmax+0.01), color = 'white', size = 1) +
+    geom_segment(data = covenanted_area_ref, aes(y = median, yend = median, x = xmin-0.01, xend = xmax+0.075, color = model)) +
+    annotate('segment', y = filter(covenanted_area_ref2, stage == "Stage 1")$median, yend = filter(covenanted_area_ref2, stage == "Stage 2")$median, 
+             x = covenanted_area_ref$xmax + 0.04, xend = covenanted_area_ref$xmax + 0.04, 
+             color = colorpal[3:4],
+             size = .75,
+             arrow = arrow(length = unit(0.2, "cm"))) +
+    geom_vline(xintercept = c(0.5,1.5), linetype = 2, color = 'gray50') +
+    scale_fill_colorblind7() +
+    scale_color_colorblind7() +
+    guides(color = 'none', fill = 'none') +
+    scale_y_continuous("Covenant area (ha)") +
+    ggpubr::theme_pubr() +
+    annotate('text', x = 1, y = 15000, color = 'black', label = 'Stage 1', vjust=1) +
+    annotate('text', x = 2 , y = 15000, color = 'black', label = 'Stage 2', vjust=1) +
+    coord_cartesian(xlim = c(0.5,2.5), ylim = c(0,15000)) +
+    theme(axis.title.x = element_blank(),
+          axis.line.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.text.x = element_blank()) 
   
   covenanted_area_end_plot <- list(baseline = baseline_area_ts, robust = robust_area_ts, flexible = flexible_area_ts, flexible_learning = flexible_learning_area_ts) %>%
     bind_rows(.id = 'model') %>%
@@ -286,12 +368,13 @@ for (i in 1:length(scen_list)) {
     ggplot(aes(x = name_num, y = median, fill = model)) +
     #geom_hline(yintercept = 7000) +
     geom_rect(aes(ymin = lb, ymax = ub, xmin = name_num - 0.4, xmax = name_num + 0.4))+
-    geom_point(data = offered_area_end, aes(y = area, x = name_num, color = model), size = 2, shape = 23) +
+    geom_segment(aes(y = median, yend = median, x = name_num-0.4, xend = name_num+0.4), color = 'white', size = 1) +
+    #geom_point(data = offered_area_end, aes(y = area, x = name_num, color = model), size = 2, shape = 23) +
     #geom_text(aes(y = 3500, x = name_num, label = model, color = model), size = 4, vjust = 0) +
-    coord_cartesian(ylim = c(3000, 23000)) +
-    guides(color = 'none') +
-    ggsci::scale_fill_nejm() +
-    ggsci::scale_color_nejm() +
+    coord_cartesian(ylim = c(3000, 15000)) +
+    guides(color = 'none', fill = 'none') +
+    scale_fill_colorblind7() +
+    scale_color_colorblind7() +
     theme_void() +
     theme(axis.line.x = element_blank())
   
@@ -318,61 +401,122 @@ for (i in 1:length(scen_list)) {
     ggplot(aes(x = name_num)) +
     #geom_vline(xintercept = median(unlist(flexible_costs)), linetype = 2) +
     #geom_vline(xintercept = median(unlist(flexible_learning_costs)), linetype = 2) +
-    geom_segment(aes(y = lb, yend = ub, x = name_num, xend = name_num, color = model), linewidth = 1) 
+    geom_segment(aes(y = lb, yend = ub, x = name_num, xend = name_num, color = model), size = 1) 
   
-  if ('F' %in% scen_list_i) {
+  if ('Flexible' %in% scen_list_i) {
     cost_plot <- cost_plot +
       annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(robust_costs)), x = 2, xend = 6.5, color = 'gray20', linetype = 1) +
       annotate('segment', y = median(unlist(flexible_costs)), yend = median(unlist(flexible_costs)),  x= 3, xend = 6.5, color = 'gray20', linetype = 2) +
-      annotate('text', y = mean(c(median(unlist(flexible_costs)),median(unlist(robust_costs)))), x = 5.5, label = "*", hjust = 1) +
+      annotate('text', y = mean(c(median(unlist(flexible_costs)),median(unlist(robust_costs)))), x = 5.5, label = "(i)", hjust = 1) +
       annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(flexible_costs)), x = 5.6, xend = 5.6, arrow = arrow(length = unit(0.2, "cm")))
   }
   
-  if ('F+L' %in% scen_list_i) {
+  if ('Flexible & Learning' %in% scen_list_i) {
     cost_plot <- cost_plot +
       annotate('segment', y = median(unlist(flexible_learning_costs)), yend = median(unlist(flexible_learning_costs)), x= 4, xend = 6.5, color = 'gray20', linetype = 2) +
-      annotate('text', y = median(unlist(flexible_learning_costs)) - 1e7, x = 5.9, label = "**", hjust = 1) +
+      annotate('text', y = median(unlist(flexible_learning_costs)) - 1e7, x = 5.9, label = "(ii)", hjust = 1) +
       annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(flexible_learning_costs)), x = 6, xend = 6, arrow = arrow(length = unit(0.2, "cm")))
   }
   
   cost_plot <- cost_plot +
     geom_hline(yintercept = 0) +
     geom_point(aes(y = median, color = model), size = 3) +
-    ggsci::scale_color_nejm()+
-    geom_text(aes(label = model, y = ub + 10e6, x = name_num, color = model)) +
+    scale_color_colorblind7()+
+    #geom_text(aes(label = model, y = ub + 10e6, x = name_num, color = model)) +
     ggpubr::theme_pubr() +
     scale_y_continuous("Cost", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6)) +
-    coord_cartesian(ylim = c(0, 3e8), xlim = c(0,6.5), expand = F) +
+    coord_cartesian(ylim = c(0, 2.5e8), xlim = c(0,6.5), expand = F) +
     #scale_y_reverse() +
     guides(color = 'none') +
     theme(axis.title.x = element_blank(),
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank())
   
-  decisions <- list(baseline = cbind(baseline_decisions, area_max = baseline_area_max), 
-                    robust = cbind(robust_decisions, area_max = robust_area_max), 
-                    flexible = cbind(flexible_decisions, area_max = flexible_area_max), 
-                    flexible_learning = cbind(flexible_learning_decisions, area_max = flexible_learning_area_max)) %>%
+  decisions <- list(baseline = cbind(baseline_decisions, area_max = baseline_area$x1), 
+                    robust = cbind(robust_decisions, area_max = robust_area$x1), 
+                    flexible = cbind(flexible_decisions, area_max = flexible_area$x1), 
+                    flexible_learning = cbind(flexible_learning_decisions, area_max = flexible_learning_area$x1)) %>%
     bind_rows(.id = 'model')
+  
+  fcn_avg_decisions <- function(decisions, area) {
+    id <- decisions$NewPropID
+    x_str <- paste0("x", 1:10)
+    y_str <- paste0("sum_y", 1:10)
+    x <- apply(decisions[x_str] * area, 1, mean)
+    y <- apply(decisions[y_str] * area / 12, 1, mean)
+    data.frame(NewPropID=id,x,y)
+  }
+  
   prop_decisions <- prop_df %>%
     right_join(decisions, by="NewPropID", multiple = 'all') %>%
     pivot_longer(c('x','y'), names_to = 'stage', values_to = 'decision') %>%
-    mutate(area = ifelse(stage == 'y' & model == 'flexible_learning', UpperProp * AREA,UpperProp * AREA * decision)) %>%
+    mutate(area = ifelse(stage == 'y' & model == 'flexible_learning', UpperProp * AREA, UpperProp * AREA * decision)) %>%
     mutate(probability = ifelse(stage == 'y' & model == 'flexible_learning', decision, decision > 0)) %>%
     mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     filter(decision > 0) %>%
     mutate(stage = factor(stage, c('x','y'), c('Stage 1', 'Stage 2'))) %>%
     filter(model %in% scen_list_i)
   prop_decisions_plot <- prop_decisions %>%
+    filter(area > 20) %>%
     ggplot() +
     geom_sf(data = st_transform(nsw_lga_union, st_crs(prop_centroid))) +
-    geom_point(aes(x = X, y = Y, size = area_max, fill = model, alpha = probability), color = 'gray50', pch = 21) +
-    ggsci::scale_fill_nejm() +
+    geom_point(aes(x = X, y = Y, color = model)) +
+    scale_color_colorblind7() +
     scale_alpha_continuous(range = c(ifelse(min(prop_decisions$probability) > 0.99, 1, 0),1))+
     scale_size_continuous("Offer (ha)", range = c(1,4), limits = c(0, NA), breaks = c(1, 1000, 2000, 3000))+
     facet_grid(stage~model, switch = 'y') +
-    guides(alpha = 'none', fill = 'none') +
+    guides(alpha = 'none', fill = 'none', color = 'none') +
     theme_void()
+  
+  avg_decisions <- list(baseline = fcn_avg_decisions(baseline_decisions, baseline_area), 
+                        robust = fcn_avg_decisions(robust_decisions, baseline_area), 
+                        flexible = fcn_avg_decisions(flexible_decisions, baseline_area), 
+                        flexible_learning = fcn_avg_decisions(flexible_learning_decisions, baseline_area)) %>%
+    bind_rows(.id = 'model')
+  
+  avg_decisions_lga <- avg_decisions %>%
+    left_join(prop_lga_lookup, by = 'NewPropID') %>%
+    filter(!is.na(NSW_LGA__2)) %>%
+    ungroup() %>%
+    group_by(model, NSW_LGA__2) %>%
+    summarize(stage1 = sum(x), stage2 = sum(y)) %>%
+    pivot_longer(c('stage1', 'stage2'), names_to = 'stage', values_to = 'area') %>%
+    mutate(stage = factor(stage, c('stage1', 'stage2'), c('Stage 1', 'Stage 2'))) %>%
+    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list))
+  
+  avg_decisions_lga_model <- nsw_lga %>%
+    left_join(avg_decisions_lga, by = 'NSW_LGA__2') %>%
+    filter(!is.na(model)) %>%
+    filter(area > 1)
+  
+  prop_cloropleth <- avg_decisions_lga_model %>%
+    ggplot() +
+    geom_sf(data=nsw_lga, lwd = 0.2, color = 'gray50') +
+    geom_sf(aes(fill = area), lwd = 0.2, color = 'gray50') +
+    facet_grid(stage~model, switch = 'y') +
+    scale_fill_viridis_b("Expected\ncovenant\narea (ha)", trans='log', breaks= c(1,10,100,1000), direction = -1) +
+    theme_void()
+  
+  ## Euler sets
+  baseline_robust <- fcn_decision_set(baseline_decisions, robust_decisions, baseline_area) %>% colMeans()
+  robust_flexible <- fcn_decision_set(robust_decisions, flexible_decisions, baseline_area) %>% colMeans()
+  robust_flexible_learning <- fcn_decision_set(robust_decisions, flexible_learning_decisions, baseline_area) %>% colMeans()
+  
+  fcn_plot_euler <- function(set,labs=c("A","B"),fills=c("gray80", "gray80")) {
+    a <- round(as.numeric(set['a']))
+    b <- round(as.numeric(set['b']))
+    u <- round(as.numeric(set['u']))
+    fit <- euler(c("A" = a, "B" = b, "A&B" = u))
+    plot(fit, fills = fills, 
+         labels = NULL, 
+         quantities = list(type='percent'),
+         #legend = list(labels = labs, position = 'bottom')
+         )
+  }
+  
+  euler1 <- fcn_plot_euler(baseline_robust, labs=scen_list[c(1,2)], fills = colorpal[c(1,2)])
+  euler2 <- fcn_plot_euler(robust_flexible, labs=scen_list[c(2,3)], fills = colorpal[c(2,3)])
+  euler3 <- fcn_plot_euler(robust_flexible_learning, labs=c(scen_list[c(2)], "Flexible &\nLearning"), fills = colorpal[c(2,4)])
   
   maps_plot <-  aus_plot + prop_decisions_plot + plot_layout(widths = c(1,2))
   #ggsave("plots/map_plot.png", maps_plot, width = 3000, height = 1300, units = 'px')
@@ -386,16 +530,22 @@ for (i in 1:length(scen_list)) {
   plot1 <- wrap_elements(full=aus_plot) + wrap_elements(full=prop_decisions_plot) + cost_plot + covenanted_area_plot + covenanted_area_end_plot + year_trend_plot + end_range_plot + 
     plot_layout(design = layout, heights = c(2,1,1.5), widths = c(1,1.2,0.4)) & plot_annotation(tag_levels = 'a') 
   
-  plot1a <- wrap_elements(full=aus_plot) + wrap_elements(full=prop_decisions_plot) + 
-    plot_layout(design = layout, widths = c(1,1.5)) & plot_annotation(tag_levels = 'a') 
-  
-  layout_1b <- "
-  ABC
-  ADE
+  layout_1a <- "
+  ABB
+  CCC
   "
   
-  plot1b <- cost_plot + covenanted_area_plot + covenanted_area_end_plot + year_trend_plot + end_range_plot + 
-    plot_layout(design = layout_1b, heights = c(1,1.5), widths = c(1,1.2,0.4)) & plot_annotation(tag_levels = 'a') 
+  eulers <- as.ggplot(euler1) + as.ggplot(euler2) + as.ggplot(euler3) + cowplot::get_legend(end_range_plot) + plot_layout(nrow = 1)
+  plot1a <- wrap_elements(full=aus_plot) + wrap_elements(full=prop_decisions_plot) + wrap_elements(eulers) +
+    plot_layout(design = layout_1a, heights = c(1,0.5)) & plot_annotation(tag_levels = 'a')
+  
+  layout_1b <- "
+  AB#
+  ACD
+  "
+  
+  plot1b <- cost_plot + covenanted_area_stages_plot + year_trend_plot + end_range_plot + 
+    plot_layout(design = layout_1b, heights = c(1,1), widths = c(1,1.2,0.4), guides = 'collect') & plot_annotation(tag_levels = list(c('a','b','c',''))) & theme(legend.position='bottom')
   
   # Save plots to list
   plot_list[[i]] <- list(
@@ -435,7 +585,7 @@ for (i in 1:length(recourse_types)) {
     filter(recourse %in% recourse_types[1:i]) %>%
     ggplot(aes( x = model)) +
     geom_hline(yintercept =  0, color = 'gray70') +
-    geom_segment(aes(color = recourse, y = median, yend = median, x = model - bar_width, xend = model + bar_width), linewidth = 1) +
+    geom_segment(aes(color = recourse, y = median, yend = median, x = model - bar_width, xend = model + bar_width), size = 1) +
     geom_rect(aes(fill = recourse, ymin = lb, ymax = ub, xmin = model - bar_width, xmax = model + bar_width), alpha = 0.5) +
     geom_text(aes(color = recourse, label = recourse, y = lb + 0.04)) +
     geom_text(data = annotations, aes(x = model, y = y, label = label), size = 3) +
@@ -450,7 +600,7 @@ for (i in 1:length(recourse_types)) {
           axis.line = element_blank(),
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank(),
-          panel.border = element_rect(fill = NA, linewidth = 1))
+          panel.border = element_rect(fill = NA, size = 1))
   
   plot_list_ns[[i]] <- ns_plot
 }
@@ -459,6 +609,8 @@ for (i in 1:length(recourse_types)) {
 saveRDS(plot_list, file = "plots/plot_list.rds")
 saveRDS(plot_list_ns, file = "plots/plot_list_ns.rds")
 ggsave("plots/plot1.png", plot_list[[4]]$plot1, width = 2800, height = 2300, units = 'px')
+ggsave("plots/plot1a.png", plot_list[[4]]$plot1a, width = 2800, height = 1800, units = 'px')
+ggsave("plots/plot1b.png", plot_list[[4]]$plot1b, width = 2800, height = 1500, units = 'px')
 ggsave("plots/plot2.png", plot_list_ns[[3]], width = 2000, height = 800, units = 'px')
 
 
@@ -506,11 +658,35 @@ plot_line_diff <- function(summary_diff_pct, dodge_width = 0.0005, connect = T) 
     theme(legend.title = element_blank())
 }
 
-# Extract matrices of the differences between robust and flexible solutions -----
-full_learning <- c(1,6,0.25,1,12,0.02,0.1)
-no_learning <- c(1,6,0.25,12,12,0.02,0.1)
+plot_line_diff_learning <- function(summary_diff_pct, dodge_width = 0.0005, label = "", connect = T) {
+  p <- summary_diff_pct %>%
+    as.data.frame() %>%
+    mutate(name = as.numeric(name)) %>%
+    mutate(learning = factor(learning, c('no', 'full'), c('Flexible', 'Flexible & Learning'))) %>%
+    mutate(median = -median, lb = -lb, ub = -ub) %>%
+    ggplot(aes(x = name, y = median, color = learning)) +
+    geom_hline(yintercept = 0) 
+  
+  if (connect) {
+    p <- p + geom_line(position=position_dodge(width=dodge_width))
+  }
+  
+  p +
+    geom_point(position=position_dodge(width=dodge_width)) +
+    geom_errorbar(aes(ymin = lb, ymax = ub), width = dodge_width, position=position_dodge(width=dodge_width)) + 
+    scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%")) +
+    scale_x_continuous(label) +
+    ggsci::scale_color_d3() +
+    ggsci::scale_fill_d3() +
+    ggpubr::theme_pubr() +
+    theme(legend.title = element_blank())
+}
 
-dr_vec <- seq(0.05,1,0.05) %>%
+# Extract matrices of the differences between robust and flexible solutions -----
+full_learning <- c(1,6,0.25,1,10,0.02,0.1)
+no_learning <- c(1,6,0.25,12,10,0.02,0.1)
+
+dr_vec <- seq(0.0,1,0.05) %>%
   sapply(function(x) format(round(x, 2), nsmall = 1))
 dr_flex_diff <- list(
   no = flexibility_differences(params = no_learning, loop_vec = dr_vec, dep_var = 7),
@@ -518,11 +694,29 @@ dr_flex_diff <- list(
   ) %>%
   bind_rows(.id = "learning")
 
+dr_flex_plot <- dr_flex_diff %>%
+  mutate(learning = factor(learning, c('no', 'full'), c('Flexible', 'Flexible & Learning'))) %>%
+  ggplot(aes(x = as.numeric(name))) +
+  geom_vline(xintercept = 7.2/101, linetype = 'longdash', color = 'gray50') +
+  annotate("text", x = .02+7.2/101, y = .95, label = "", hjust = 0) +
+  geom_ribbon(aes(fill = learning, ymin = -lb, ymax = -ub), alpha = .4) +
+  geom_point(aes(color = learning, y = -median)) +
+  geom_line(aes(color = learning, y = -median)) +
+  scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(0,1)) +
+  scale_color_manual("", values = colorpal[3:4]) +
+  scale_fill_manual("", values = colorpal[3:4]) +
+  scale_x_continuous("Probability of land clearing") +
+  ggpubr::theme_pubr() +
+  labs(caption = "Dashed line show 1972-2014 total deforestation in Australia (Evans, 2016)") +
+  theme(legend.position = "bottom")
+
+ggsave("plots/plot3.png", dr_flex_plot, width = 1500, height = 1100, units = 'px')
+
 dr_flex_diff %>%
   ggplot(aes(color = learning, fill = learning, x = as.numeric(name))) +
   geom_point(aes(y = -median), position=position_dodge(width=0.02)) +
   geom_errorbar(aes(x=as.numeric(name), ymin = -lb, ymax = -ub), width = 0.02, position=position_dodge(width=0.02)) + 
-  scale_y_reverse("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%")) +
+  scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%")) +
   ggsci::scale_color_d3() +
   ggpubr::theme_pubr()
 
@@ -539,15 +733,23 @@ tt_flex_diff <- list(
   bind_rows(.id = 'learning')
 
 kt_flex_diff <- list(
-  full = flexibility_differences(params = full_learning, loop_vec = c(0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3), dep_var = 3),
-  no = flexibility_differences(params = no_learning, loop_vec = c(0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3), dep_var = 3)
+  full = flexibility_differences(params = full_learning, loop_vec = c(0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275), dep_var = 3),
+  no = flexibility_differences(params = no_learning, loop_vec = c(0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275), dep_var = 3)
 ) %>%
   bind_rows(.id = 'learning')
 
 ns_flex_diff <- flexibility_differences(params = no_learning, loop_vec = 1:12, dep_var = 4, realisation = 1:10, interval = c(0.05, 0.95))
 
 sdr_flex_diff <- list(
-  #full = flexibility_differences(params = full_learning, loop_vec = c("0.0", 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 6),
-  no = flexibility_differences(params = no_learning, loop_vec = c("0.0", 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 6)
+  full = flexibility_differences(params = no_learning, loop_vec = c(0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 6),
+  no = flexibility_differences(params = full_learning, loop_vec = c(0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 6)
 ) %>%
   bind_rows(.id = 'learning')
+
+
+tt_flex_plot <- plot_line_diff_learning(mutate(tt_flex_diff, name = 2000+as.numeric(name)*10), 0.2, "Year for new investment (t')")
+kt_flex_plot <- plot_line_diff_learning(kt_flex_diff, 0.005, "Ecological indicator cut-off")
+sdr_flex_plot <- plot_line_diff_learning(sdr_flex_diff, 0.001, "Discount rate (1-ρ)")
+
+sensitivity_plots <- (tt_flex_plot | kt_flex_plot | sdr_flex_plot) + plot_layout(guides='collect') & theme(legend.position = 'top')
+ggsave("plots/sensitivity_plots.png", sensitivity_plots, units = 'px', width = 3000, height = 1000)
