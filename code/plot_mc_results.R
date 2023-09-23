@@ -6,9 +6,9 @@ library(purrr)
 library(patchwork)
 library(geodata)
 library(sf)
-library(nngeo)
 library(ggthemes)
 library(ggplotify)
+library(eulerr)
 
 results_dir <- "results/mc_sim_mcmc/"
 #results_dir <- "~/Documents/OneDrive - The University of Queensland/Documents/GitHub/koala-uncertainty/results/mc_sim/"
@@ -18,9 +18,10 @@ sp = 1 #1:10
 tt = 6 # [0,1,2,3,4,5,6,7]
 kt = 0.25 # [0.1, 0.15, 0.2, 0.25, 0.3]
 ns = 12 # 1:12
-rr = 10
+rr = 30
 sdr = 0.02
 dr = 0.1
+k = 7000
 
 colorpal <- c("#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#D55E00", "#F0E442" ,"#0072B2")
 
@@ -34,8 +35,11 @@ scale_color_colorblind7 = function(...){
   scale_color_discrete(..., type = colorpal)
 }
 
-flexibility_differences <- function(recourse = c(T,T,F,F), loop_vec = 1:10, params = c(sp, tt, kt, ns, rr, sdr, dr), dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
-  base_string <- "run_exp_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s"
+default_params = c(k, sp, tt, kt, ns, rr, sdr, dr)
+base_string <- "run_k-%s_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s"
+
+flexibility_differences <- function(recourse = c(T,T,F,F), loop_vec = 1:10, params = default_params, dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
+  # dep_var starts at 0
   cost_diff_pct <- lapply(loop_vec, function(x) {
     vec_var <- params
     vec_var[dep_var] <- x
@@ -82,35 +86,16 @@ year_vec <- seq(2000, 2070, by=10)
 # Baseline vs robust ------
 
 # Load property data
-properties <- st_read("data/spatial_predictions_v1_1.gdb", layer = "spatial_pred_inperp_v1_1")
-prop_centroid <- properties %>%
-  st_centroid() %>%
-  select(NewPropID, MeanProp, UpperProp, Shape_Area) %>%
-  mutate(AREA = Shape_Area * 0.0001)
-prop_df <- st_drop_geometry(prop_centroid) %>%
-  cbind(st_coordinates(prop_centroid))
-## Spatial plots
-aus_border <- gadm(country = "AUS", level = 1, path = "data/", resolution = 2) %>%
-  sf::st_as_sf()
-nsw_lga <- st_read( "data/planning_units.gdb", layer = 'nsw_lga_pu_all')
-nsw_lga_union <- nsw_lga%>%
-  st_union() %>%
-  nngeo::st_remove_holes()
-nsw_bbox <- st_bbox(nsw_lga_union)
-bbox_buffer <- 1
-aus_xlim <- c(113.338953078, 153.569469029)
-aus_ylim <- c(-43.6345972634,-10.6681857235)
-saveRDS(list(aus_border=aus_border, nsw_bbox=nsw_bbox, nsw_lga_union=nsw_lga_union), file = 'plots/shapes.rds')
-
-prop_lga <- st_join(prop_centroid, nsw_lga)
-prop_lga_lookup <- prop_lga %>% 
-  st_drop_geometry() %>%
-  select(NewPropID, NSW_LGA__2)
+load('plots/shapes.RData')
 
 aus_plot <- ggplot() +
   geom_sf(data = aus_border, fill = 'gray80', color = 'white') +
-  geom_rect(aes(xmin = nsw_bbox$xmin - bbox_buffer, xmax = nsw_bbox$xmax + bbox_buffer, ymin = nsw_bbox$ymin - bbox_buffer, ymax = nsw_bbox$ymax + bbox_buffer), fill = NA, color = 'gray50') +
   geom_sf(data = nsw_lga_union, size = 0.5, color = NA, fill = '#FFD580') +
+  geom_rect(aes(xmin = nsw_bbox$xmin - bbox_buffer, 
+                xmax = nsw_bbox$xmax + bbox_buffer, 
+                ymin = nsw_bbox$ymin - bbox_buffer, 
+                ymax = nsw_bbox$ymax + bbox_buffer), 
+            fill = NA, color = 'gray50') +
   coord_sf(xlim = aus_xlim, ylim = aus_ylim) +
   theme_void()
 #theme_bw() +
@@ -119,14 +104,12 @@ aus_plot <- ggplot() +
 
 spatial_pred <- read_csv('data/spatial_predictions_10yr.csv')
 
-scen_list <- c('Ignore Climate Change', 'Inflexible', 'Flexible', 'Flexible & Learning')
+scen_list <- c('Ignore Uncertainty', 'Robust', 'Flexible', 'Flexible & Learning')
 plot_list <- list()
-
-
 
 fcn_decision_set <- function(a,b,area) {
   # Set of decisions
-  x_str <- paste0("x", 1:10)
+  x_str <- paste0("x", 1:rr)
   ax <- a[x_str]
   bx <- b[x_str]
   u_idx <- ax * bx # union
@@ -140,11 +123,11 @@ fcn_decision_set <- function(a,b,area) {
 for (i in 4:length(scen_list)) {
   scen_list_i <- scen_list[1:i]
 
-  get_run_string <- function(param=default) do.call(sprintf, c(fmt = "run_exp_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s", as.list(param)))
-  baseline_string <- get_run_string(c(sp, tt, kt, ns, rr, sdr, dr))
-  robust_string   <- get_run_string(c(sp, tt, kt, ns, rr, sdr, dr))
-  flexible_string <- get_run_string(c(sp, tt, kt, ns, rr, sdr, dr))
-  flexible_learning_string <- get_run_string(c(sp, tt, kt, 1, rr, sdr, dr))
+  get_run_string <- function(param=default) do.call(sprintf, c(fmt = base_string, as.list(param)))
+  baseline_string <- get_run_string(c(k, sp, tt, kt, ns, rr, sdr, dr))
+  robust_string   <- get_run_string(c(k, sp, tt, kt, ns, rr, sdr, dr))
+  flexible_string <- get_run_string(c(k, sp, tt, kt, ns, rr, sdr, dr))
+  flexible_learning_string <- get_run_string(c(k, sp, tt, kt, 1, rr, sdr, dr))
   
   baseline_metric <- read_csv(paste0(results_dir, "metric_baseline_", baseline_string, ".csv"), col_types = cols())
   robust_metric <- read_csv(paste0(results_dir, "metric_nr_", robust_string, ".csv"), col_types = cols())
@@ -239,23 +222,29 @@ for (i in 4:length(scen_list)) {
     return(as.data.frame(t(apply(area, 1, max)) %*% as.matrix(decisions[,c('x','y','w')])))
   }
   calculate_area <- function(area, decisions) {
-    t(as.matrix(area)) %*% as.matrix(decisions)
+    x <- decisions[,paste0('x', 1:rr)]
+    y <- decisions[,paste0('sum_y', 1:rr)]/12
+    w <- decisions[,paste0('sum_w', 1:rr)]/12
+    
+    data.frame(x = (area * x) %>% colSums() %>% as.vector(),
+               y = (area * y) %>% colSums() %>% as.vector(),
+               w = (area * w) %>% colSums() %>% as.vector())
   }
   
   area_range <- function(area) {
     area <- as.data.frame(area)
     median = apply(area, 2, quantile, probs = .5)
-    lb = area[which.min(area$x + area$y - area$w),]
-    ub = area[which.max(area$x + area$y - area$w),]
+    lb = apply(area, 2, quantile, probs = .05)
+    ub = apply(area, 2, quantile, probs = .95)
     df <- rbind(median = median, lb = lb, ub = ub) %>% as.data.frame()
     df$stat <- as.list(row.names(df))
     return(df)
   }
   
-  baseline_sum_area <- calculate_area(baseline_area, baseline_decisions[,c('x','y','w')]) %>% area_range()
-  robust_sum_area <- calculate_area(robust_area, robust_decisions[,c('x','y','w')]) %>% area_range()
-  flexible_sum_area <- calculate_area(flexible_area, flexible_decisions[,c('x','y','w')]) %>% area_range()
-  flexible_learning_sum_area <- calculate_area(flexible_learning_area, flexible_learning_decisions[,c('x','y','w')]) %>% area_range()
+  baseline_sum_area <- calculate_area(baseline_area, baseline_decisions) %>% area_range()
+  robust_sum_area <- calculate_area(robust_area, robust_decisions) %>% area_range()
+  flexible_sum_area <- calculate_area(flexible_area, flexible_decisions) %>% area_range()
+  flexible_learning_sum_area <- calculate_area(flexible_learning_area, flexible_learning_decisions) %>% area_range()
   
   area_to_ts <- function(area) {
     area <- as.data.frame(area)
@@ -350,9 +339,9 @@ for (i in 4:length(scen_list)) {
     guides(color = 'none', fill = 'none') +
     scale_y_continuous("Covenant area (ha)") +
     ggpubr::theme_pubr() +
-    annotate('text', x = 1, y = 15000, color = 'black', label = 'Stage 1', vjust=1) +
-    annotate('text', x = 2 , y = 15000, color = 'black', label = 'Stage 2', vjust=1) +
-    coord_cartesian(xlim = c(0.5,2.5), ylim = c(0,15000)) +
+    annotate('text', x = 1, y = 18000, color = 'black', label = 'Stage 1', vjust=1) +
+    annotate('text', x = 2 , y = 18000, color = 'black', label = 'Stage 2', vjust=1) +
+    coord_cartesian(xlim = c(0.5,2.5), ylim = c(6000,18000)) +
     theme(axis.title.x = element_blank(),
           axis.line.x = element_blank(),
           axis.ticks.x = element_blank(),
@@ -440,8 +429,8 @@ for (i in 4:length(scen_list)) {
   
   fcn_avg_decisions <- function(decisions, area) {
     id <- decisions$NewPropID
-    x_str <- paste0("x", 1:10)
-    y_str <- paste0("sum_y", 1:10)
+    x_str <- paste0("x", 1:rr)
+    y_str <- paste0("sum_y", 1:rr)
     x <- apply(decisions[x_str] * area, 1, mean)
     y <- apply(decisions[y_str] * area / 12, 1, mean)
     data.frame(NewPropID=id,x,y)
@@ -565,7 +554,7 @@ for (i in 4:length(scen_list)) {
 
 ## Flexibility types plot --------
 recourse_types <- c('(A)', '(E)', '(A/E)')
-flexibility_diff_ns <- flexibility_differences(loop_vec = c(1,3,12), dep_var = 4) 
+flexibility_diff_ns <- flexibility_differences(loop_vec = c(1,3,12), dep_var = 5) 
 annotation1 <- c("No Learning", 1, -filter(flexibility_diff_ns, recourse == 'ar'& name == 12)$ub - 0.02, "V(F)")
 annotation2 <- c("Full Learning", 1, -filter(flexibility_diff_ns, recourse == 'ar'& name == 1)$ub - 0.02, "V(F+L)")
 annotations <- as.data.frame(rbind(annotation1, annotation2))
@@ -600,7 +589,7 @@ for (i in 1:length(recourse_types)) {
           axis.line = element_blank(),
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank(),
-          panel.border = element_rect(fill = NA, size = 1))
+          panel.border = element_rect(fill = NA, linewidth = 1))
   
   plot_list_ns[[i]] <- ns_plot
 }
@@ -683,14 +672,14 @@ plot_line_diff_learning <- function(summary_diff_pct, dodge_width = 0.0005, labe
 }
 
 # Extract matrices of the differences between robust and flexible solutions -----
-full_learning <- c(1,6,0.25,1,10,0.02,0.1)
-no_learning <- c(1,6,0.25,12,10,0.02,0.1)
+full_learning <- c(7000,1,6,0.25,1,30,0.02,0.1)
+no_learning <- c(7000,1,6,0.25,12,30,0.02,0.1)
 
 dr_vec <- seq(0.0,1,0.05) %>%
   sapply(function(x) format(round(x, 2), nsmall = 1))
 dr_flex_diff <- list(
-  no = flexibility_differences(params = no_learning, loop_vec = dr_vec, dep_var = 7),
-  full = flexibility_differences(params = full_learning, loop_vec = dr_vec, dep_var = 7)
+  no = flexibility_differences(params = no_learning, loop_vec = dr_vec, dep_var = 8),
+  full = flexibility_differences(params = full_learning, loop_vec = dr_vec, dep_var = 8)
   ) %>%
   bind_rows(.id = "learning")
 
@@ -721,28 +710,28 @@ dr_flex_diff %>%
   ggpubr::theme_pubr()
 
 sp_flex_diff <- list(
-  full = flexibility_differences(params = full_learning, loop_vec = 1:10, dep_var = 1),
-  no = flexibility_differences(params = no_learning, loop_vec = 1:10, dep_var = 1)
+  full = flexibility_differences(params = full_learning, loop_vec = 1:10, dep_var = 2),
+  no = flexibility_differences(params = no_learning, loop_vec = 1:10, dep_var = 2)
 ) %>%
   bind_rows(.id = 'learning')
 
 tt_flex_diff <- list(
-  full = flexibility_differences(params = full_learning, loop_vec = c(3,4,5,6), dep_var = 2, realisation = 1:10),
-  no = flexibility_differences(params = no_learning, loop_vec = c(3,4,5,6), dep_var = 2, realisation = 1:10)
+  full = flexibility_differences(params = full_learning, loop_vec = c(3,4,5,6), dep_var = 3, realisation = 1:10),
+  no = flexibility_differences(params = no_learning, loop_vec = c(3,4,5,6), dep_var = 3, realisation = 1:10)
 ) %>%
   bind_rows(.id = 'learning')
 
 kt_flex_diff <- list(
-  full = flexibility_differences(params = full_learning, loop_vec = c(0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275), dep_var = 3),
-  no = flexibility_differences(params = no_learning, loop_vec = c(0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275), dep_var = 3)
+  full = flexibility_differences(params = full_learning, loop_vec = c(0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275), dep_var = 4),
+  no = flexibility_differences(params = no_learning, loop_vec = c(0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275), dep_var = 4)
 ) %>%
   bind_rows(.id = 'learning')
 
 ns_flex_diff <- flexibility_differences(params = no_learning, loop_vec = 1:12, dep_var = 4, realisation = 1:10, interval = c(0.05, 0.95))
 
 sdr_flex_diff <- list(
-  full = flexibility_differences(params = no_learning, loop_vec = c(0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 6),
-  no = flexibility_differences(params = full_learning, loop_vec = c(0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 6)
+  full = flexibility_differences(params = no_learning, loop_vec = c(0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 7),
+  no = flexibility_differences(params = full_learning, loop_vec = c(0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 7)
 ) %>%
   bind_rows(.id = 'learning')
 
