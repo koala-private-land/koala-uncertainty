@@ -545,7 +545,8 @@ for (i in 4:length(scen_list)) {
     scale_size_continuous("Offer (ha)", range = c(1,4), limits = c(0, NA), breaks = c(1, 1000, 2000, 3000))+
     facet_grid(stage~model, switch = 'y') +
     guides(alpha = 'none', fill = 'none', color = 'none') +
-    theme_void()
+    theme_void() +
+    theme(strip.text = element_text(margin = margin(2, 2, 2, 2, "pt")))
   
   avg_decisions <- list(baseline = fcn_avg_decisions(baseline_decisions, baseline_area), 
                         robust = fcn_avg_decisions(robust_decisions, baseline_area), 
