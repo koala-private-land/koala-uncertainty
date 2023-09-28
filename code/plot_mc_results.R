@@ -628,11 +628,11 @@ for (i in 4:length(scen_list)) {
     plot_layout(design = layout_1b, heights = c(1,1), widths = c(1,1.2,0.4), guides = 'collect') & plot_annotation(tag_levels = list(c('a','b','c',''))) & theme(legend.position='bottom')
   
   layout_1b2 <- "
-  AD
-  BC
+  AB
+  CD
   "
   
-  plot1b2 <- cost_plot_horizontal + year_split_inset + end_range_plot + guide_area()+
+  plot1b2 <- year_split_inset + end_range_plot + cost_plot_horizontal + guide_area()+
     plot_layout(design = layout_1b2, heights = c(1,1), widths = c(1,0.2), guides = 'collect') & plot_annotation(tag_levels = list(c('a','b','c','')))
   
   # Save plots to list
