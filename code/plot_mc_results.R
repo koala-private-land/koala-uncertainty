@@ -104,7 +104,7 @@ aus_plot <- ggplot() +
 
 spatial_pred <- read_csv('data/spatial_predictions_10yr.csv')
 
-scen_list <- c('Inflexible - Ignore Risks', 'Inflexible - Robust', 'Flexible - Climate Change', 'Flexible & Learning - Climate Change')
+scen_list <- c('Inflexible - Ignore Risk', 'Inflexible - Robust', 'Flexible - Climate Change', 'Flexible & Learning - Climate Change')
 plot_list <- list()
 
 fcn_decision_set <- function(a,b,area) {
@@ -200,13 +200,13 @@ for (i in 4:length(scen_list)) {
     filter(model %in% scen_list_i) %>%
     ggplot(aes(x = name_num, y = median, fill = model)) +
     geom_hline(yintercept = 7000) +
-    geom_rect(aes(ymin = lb, ymax = ub, xmin = name_num - 0.4, xmax = name_num + 0.4))+
+    geom_rect(aes(ymin = lb, ymax = ub, xmin = name_num - 0.4, xmax = name_num + 0.4), color = 'gray80', linewidth = 0.5)+
     geom_segment(aes(y = median, yend = median, x = name_num-0.4, xend = name_num+0.4), color = 'white', linewidth = 0.5) +
     #geom_text(aes(y = 0, x = name_num, label = model, color = model), size = 4, vjust = 0.5) +
     coord_cartesian(ylim = c(0, 18000)) +
     guides(color = 'none') +
-    scale_fill_manual("Strategy",values = scen_color_def, labels = function(x) str_wrap(x, width = 18)) +
-    scale_color_manual("Strategy",values = scen_color_def, labels = function(x) str_wrap(x, width = 18)) +
+    scale_fill_manual("Strategy",values = scen_color_def, labels = function(x) str_wrap(x, width = 24)) +
+    scale_color_manual("Strategy",values = scen_color_def, labels = function(x) str_wrap(x, width = 24)) +
     theme_void() +
     theme(axis.line.x = element_blank())
   
@@ -413,8 +413,8 @@ for (i in 4:length(scen_list)) {
     geom_line(aes(y = median, color = model), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
     geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
-    annotate("text", label = "Stage 1", x = mean(c(2020,year_vec[tt]-5)), y = 1500+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
-    annotate("text", label = "Stage 2", x = mean(c(2070,year_vec[tt]-5)), y = 1500+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
+    annotate("text", label = "Stage 1", x = mean(c(2020,year_vec[tt]-5)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
+    annotate("text", label = "Stage 2", x = mean(c(2070,year_vec[tt]-5)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
     annotate("segment", x = 2020, xend = year_vec[tt]-5, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
     annotate("segment", x = 2070, xend = year_vec[tt]-5, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
     scale_y_continuous("Policy target", labels = function(x) paste0(x*100 / 7000, '%'), breaks = ((0:8)*50) * 70) +
@@ -449,7 +449,7 @@ for (i in 4:length(scen_list)) {
     mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     ggplot(aes(fill = model, y = model, x = cost)) +
     ggridges::geom_density_ridges(color = 'white') +
-    scale_fill_manual(values=scen_color_def, labels = function(x) str_wrap(x, width = 18))+
+    scale_fill_manual(values=scen_color_def, labels = function(x) str_wrap(x, width = 24))+
     ggpubr::theme_pubr()
   
   cost_df <- costs %>%
@@ -479,7 +479,7 @@ for (i in 4:length(scen_list)) {
   cost_plot <- cost_plot +
     geom_hline(yintercept = 0) +
     geom_point(aes(y = median, color = model), size = 3) +
-    scale_color_manual(values=scen_color_def, labels = function(x) str_wrap(x, width = 18))+
+    scale_color_manual(values=scen_color_def, labels = function(x) str_wrap(x, width = 24))+
     #geom_text(aes(label = model, y = ub + 10e6, x = name_num, color = model)) +
     ggpubr::theme_pubr() +
     scale_y_continuous("Cost", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6)) +
@@ -557,7 +557,7 @@ for (i in 4:length(scen_list)) {
     facet_grid(stage~model, switch = 'y', labeller = label_wrap_gen()) +
     guides(alpha = 'none', fill = 'none', color = 'none') +
     theme_void() +
-    theme(strip.text = element_text(margin = margin(2, 2, 2, 2, "pt")))
+    theme(strip.text = element_text(margin = margin(3,3,3,3, "pt")))
   
   avg_decisions <- list(baseline = fcn_avg_decisions(baseline_decisions, baseline_area), 
                         robust = fcn_avg_decisions(robust_decisions, baseline_area), 
