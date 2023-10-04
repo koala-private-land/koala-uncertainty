@@ -104,7 +104,7 @@ aus_plot <- ggplot() +
 
 spatial_pred <- read_csv('data/spatial_predictions_10yr.csv')
 
-scen_list <- c('Inflexible - Ignore Uncertainty', 'Inflexible - Robust', 'Flexible - Climate Change', 'Flexible & Learning - Climate Change')
+scen_list <- c('Inflexible - Ignore Risks', 'Inflexible - Robust', 'Flexible - Climate Change', 'Flexible & Learning - Climate Change')
 plot_list <- list()
 
 fcn_decision_set <- function(a,b,area) {
@@ -168,7 +168,7 @@ for (i in 4:length(scen_list)) {
     scale_x_continuous("Year") +
     scale_color_colorblind7() +
     scale_fill_colorblind7() +
-    coord_cartesian(xlim = c(2020,2070), ylim = c(0, 15000)) +
+    coord_cartesian(xlim = c(2020,2070), ylim = c(0, 18000)) +
     guides(color = 'none', fill = 'none')+
     ggpubr::theme_pubr()
   
@@ -187,26 +187,26 @@ for (i in 4:length(scen_list)) {
     scale_x_continuous("Year") +
     scale_color_colorblind7() +
     scale_fill_colorblind7() +
-    facet_grid(~model) +
-    coord_cartesian(xlim = c(2020,2070), ylim = c(0, 15000)) +
+    facet_grid(~model, labeller = label_wrap_gen()) +
+    coord_cartesian(xlim = c(2020,2070), ylim = c(0, 18000)) +
     guides(color = 'none', fill = 'none')+
     ggpubr::theme_pubr()
   
   end_range_plot <- baseline_robust_df %>%
-    group_by(model) %>%
-    summarise(median = median(median), lb = min(lb), ub = max(ub)) %>%
+    filter(year==2070) %>%
+    #group_by(model) %>%
+    #summarise(median = median(median), lb = min(lb), ub = max(ub)) %>%
     mutate(name_num = as.numeric(as.factor(model))) %>%
     filter(model %in% scen_list_i) %>%
     ggplot(aes(x = name_num, y = median, fill = model)) +
-    
+    geom_hline(yintercept = 7000) +
     geom_rect(aes(ymin = lb, ymax = ub, xmin = name_num - 0.4, xmax = name_num + 0.4))+
     geom_segment(aes(y = median, yend = median, x = name_num-0.4, xend = name_num+0.4), color = 'white', linewidth = 0.5) +
     #geom_text(aes(y = 0, x = name_num, label = model, color = model), size = 4, vjust = 0.5) +
-    coord_cartesian(ylim = c(0, 15000)) +
+    coord_cartesian(ylim = c(0, 18000)) +
     guides(color = 'none') +
-    scale_fill_colorblind7("Strategy") +
-    scale_color_colorblind7("Strategy") +
-    geom_hline(yintercept = 7000) +
+    scale_fill_manual("Strategy",values = scen_color_def, labels = function(x) str_wrap(x, width = 18)) +
+    scale_color_manual("Strategy",values = scen_color_def, labels = function(x) str_wrap(x, width = 18)) +
     theme_void() +
     theme(axis.line.x = element_blank())
   
@@ -413,16 +413,16 @@ for (i in 4:length(scen_list)) {
     geom_line(aes(y = median, color = model), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
     geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
-    annotate("text", label = "Stage 1", x = mean(c(2020,year_vec[tt]-5)), y = 1500, hjust = 0.5, vjust = 1, color = 'gray50') +
-    annotate("text", label = "Stage 2", x = mean(c(2070,year_vec[tt]-5)), y = 1500, hjust = 0.5, vjust = 1, color = 'gray50') +
-    annotate("segment", x = 2020, xend = year_vec[tt]-5, y = 200, yend = 200, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
-    annotate("segment", x = 2070, xend = year_vec[tt]-5, y = 200, yend = 200, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
+    annotate("text", label = "Stage 1", x = mean(c(2020,year_vec[tt]-5)), y = 1500+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
+    annotate("text", label = "Stage 2", x = mean(c(2070,year_vec[tt]-5)), y = 1500+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
+    annotate("segment", x = 2020, xend = year_vec[tt]-5, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
+    annotate("segment", x = 2070, xend = year_vec[tt]-5, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
     scale_y_continuous("Policy target", labels = function(x) paste0(x*100 / 7000, '%'), breaks = ((0:8)*50) * 70) +
     scale_x_continuous("Year", breaks = c(2020, 2040, 2060)) +
     scale_color_manual(values = scen_color_def) +
     scale_fill_manual(values = scen_color_def) +
-    facet_grid(~model) +
-    coord_cartesian(xlim = c(2020,2070), ylim = c(0, 15000)) +
+    facet_grid(~model, labeller = label_wrap_gen()) +
+    coord_cartesian(xlim = c(2020,2070), ylim = c(0, 18000)) +
     guides(color = 'none', fill = 'none') +
     ggpubr::theme_pubr() +
     theme(strip.background = element_blank())
@@ -449,7 +449,7 @@ for (i in 4:length(scen_list)) {
     mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     ggplot(aes(fill = model, y = model, x = cost)) +
     ggridges::geom_density_ridges(color = 'white') +
-    scale_fill_manual(values=scen_color_def)+
+    scale_fill_manual(values=scen_color_def, labels = function(x) str_wrap(x, width = 18))+
     ggpubr::theme_pubr()
   
   cost_df <- costs %>%
@@ -463,14 +463,14 @@ for (i in 4:length(scen_list)) {
     #geom_vline(xintercept = median(unlist(flexible_learning_costs)), linetype = 2) +
     geom_segment(aes(y = lb, yend = ub, x = name_num, xend = name_num, color = model), size = 1) 
   
-  if ('Flexible' %in% scen_list_i) {
+  if (scen_list[3] %in% scen_list_i) {
     cost_plot <- cost_plot +
       annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(robust_costs)), x = 2, xend = 6.5, color = 'gray20', linetype = 1) +
       annotate('segment', y = median(unlist(flexible_costs)), yend = median(unlist(flexible_costs)),  x= 3, xend = 6.5, color = 'gray20', linetype = 2) +
       annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(flexible_costs)), x = 5, xend = 5, arrow = arrow(length = unit(0.2, "cm")))
   }
   
-  if ('Flexible & Learning' %in% scen_list_i) {
+  if (scen_list[4] %in% scen_list_i) {
     cost_plot <- cost_plot +
       annotate('segment', y = median(unlist(flexible_learning_costs)), yend = median(unlist(flexible_learning_costs)), x= 4, xend = 6.5, color = 'gray20', linetype = 2) +
       annotate('segment', y = median(unlist(robust_costs)), yend = median(unlist(flexible_learning_costs)), x = 6, xend = 6, arrow = arrow(length = unit(0.2, "cm")))
@@ -479,12 +479,11 @@ for (i in 4:length(scen_list)) {
   cost_plot <- cost_plot +
     geom_hline(yintercept = 0) +
     geom_point(aes(y = median, color = model), size = 3) +
-    scale_color_colorblind7()+
+    scale_color_manual(values=scen_color_def, labels = function(x) str_wrap(x, width = 18))+
     #geom_text(aes(label = model, y = ub + 10e6, x = name_num, color = model)) +
     ggpubr::theme_pubr() +
     scale_y_continuous("Cost", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6)) +
     coord_cartesian(ylim = c(0, 2.5e8), xlim = c(0,6.5), expand = F) +
-    #scale_y_reverse() +
     guides(color = 'none')
   cost_plot_vertical <- cost_plot +
     theme(axis.title.x = element_blank(),
@@ -499,13 +498,14 @@ for (i in 4:length(scen_list)) {
   
   cost_plot_horizontal <- cost_plot + 
     coord_flip(ylim = c(0, 2.4e8), xlim = c(6.5,0), expand = F) + 
-    scale_y_continuous("Cost", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), breaks = (0.5:5.5)*0.5e8) +
+    scale_y_continuous("Cost", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), 
+                       breaks = (0.5:5.5)*0.5e8) +
     scale_x_reverse() +
     theme(axis.title.y = element_blank(),
           axis.ticks.y = element_blank(), 
           axis.text.y = element_blank())
   
-  if ('Flexible' %in% scen_list_i) {
+  if (scen_list[3] %in% scen_list_i) {
     cost_plot_vertical <- cost_plot_vertical +
       annotate('text', y = mean(c(median(unlist(flexible_costs)),median(unlist(robust_costs)))), x = 4.9, label = "(i)", hjust = 1)
     
@@ -514,7 +514,7 @@ for (i in 4:length(scen_list)) {
                x = 4.9, label = "(i)", vjust = 0)
   }
   
-  if ('Flexible & Learning' %in% scen_list_i) {
+  if (scen_list[4] %in% scen_list_i) {
     cost_plot_vertical <- cost_plot_vertical +
       annotate('text', y = median(unlist(flexible_learning_costs)) - 1e7, x = 5.9, label = "(ii)", hjust = 1)
     cost_plot_horizontal <- cost_plot_horizontal +
@@ -593,7 +593,7 @@ for (i in 4:length(scen_list)) {
     ggplot() +
     geom_sf(data=nsw_lga, lwd = 0.2, color = 'gray50') +
     geom_sf(aes(fill = proportion), lwd = 0.2, color = 'gray50') +
-    facet_grid(stage~model, switch = 'y') +
+    facet_grid(stage~model, switch = 'y', labeller = label_wrap_gen()) +
     scale_fill_viridis_c("Proportion") +
     theme_void()
   
@@ -609,9 +609,9 @@ for (i in 4:length(scen_list)) {
     fit <- euler(c("A" = a, "B" = b, "A&B" = u))
     plot(fit, fills = fills, 
          labels = NULL, 
-         quantities = list(type='percent', cex = .5),
+         quantities = list(type='percent', alpha = c(0,0,1)),
          #legend = list(labels = labs, position = 'bottom')
-         )
+         )    
   }
   
   euler1 <- fcn_plot_euler(baseline_robust, labs=scen_list[c(1,2)], fills = colorpal[c(1,2)])
@@ -672,7 +672,7 @@ for (i in 4:length(scen_list)) {
 }
 
 # Save plots ------
-saveRDS(plot_list, file = "plots/plot_list.rds")
+
 ggsave("plots/plot1.png", plot_list[[4]]$plot1, width = 2800, height = 2300, units = 'px')
 ggsave("plots/plot1a.png", plot_list[[4]]$plot1a, width = 2800, height = 1800, units = 'px')
 ggsave("plots/plot1b.png", plot_list[[4]]$plot1b, width = 2800, height = 1500, units = 'px')
@@ -682,6 +682,7 @@ ggsave("plots/plot1.pdf", plot_list[[4]]$plot1, width = 2800, height = 2300, uni
 ggsave("plots/plot1a.pdf", plot_list[[4]]$plot1a, width = 2800, height = 1800, units = 'px')
 ggsave("plots/plot1b.pdf", plot_list[[4]]$plot1b, width = 2800, height = 1500, units = 'px')
 ggsave("plots/plot1b2.pdf", plot_list[[4]]$plot1b2, width = 3000, height = 1800, units = 'px')
+saveRDS(plot_list, file = "plots/plot_list.rds")
 
 ## Flexibility types plot --------
 recourse_types <- c('(A)', '(E)', '(A/E)')
@@ -709,7 +710,7 @@ for (i in 1:length(recourse_types)) {
     geom_rect(aes(fill = recourse, ymin = lb, ymax = ub, xmin = model - bar_width, xmax = model + bar_width), alpha = 0.5) +
     geom_text(aes(color = recourse, label = recourse, y = lb + 0.04)) +
     geom_text(data = annotations, aes(x = model, y = y, label = label), size = 3) +
-    facet_grid(cols = vars(name)) +
+    facet_grid(cols = vars(name), labeller = label_wrap_gen()) +
     ggsci::scale_color_d3() +
     ggsci::scale_fill_d3() +
     ggpubr::theme_pubr() +
