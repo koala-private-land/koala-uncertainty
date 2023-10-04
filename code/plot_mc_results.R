@@ -104,7 +104,7 @@ aus_plot <- ggplot() +
 
 spatial_pred <- read_csv('data/spatial_predictions_10yr.csv')
 
-scen_list <- c('Ignore Uncertainty', 'Robust', 'Flexible', 'Flexible & Learning')
+scen_list <- c('Inflexible - Ignore Uncertainty', 'Inflexible - Robust', 'Flexible - Climate Change', 'Flexible & Learning - Climate Change')
 plot_list <- list()
 
 fcn_decision_set <- function(a,b,area) {
@@ -163,7 +163,7 @@ for (i in 4:length(scen_list)) {
     geom_ribbon(aes(ymin = lb, ymax = ub, fill = model), alpha = 0.25) +
     geom_line(aes(y = median, color = model), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
-    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% c('Flexible','Flexible & Learning')), aes(y = median, color = model), size = 2)+
+    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
     scale_y_continuous("Koala habitat (ha)") +
     scale_x_continuous("Year") +
     scale_color_colorblind7() +
@@ -182,7 +182,7 @@ for (i in 4:length(scen_list)) {
     geom_ribbon(aes(ymin = lb, ymax = ub, fill = model), alpha = 0.25) +
     geom_line(aes(y = median, color = model), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
-    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% c('Flexible','Flexible & Learning')), aes(y = median, color = model), size = 2)+
+    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
     scale_y_continuous("Koala habitat (ha)") +
     scale_x_continuous("Year") +
     scale_color_colorblind7() +
@@ -211,18 +211,23 @@ for (i in 4:length(scen_list)) {
     theme(axis.line.x = element_blank())
   
   ## Import decision vectors
+  decision_vector_calc <- function(df) {
+    cutoff <- rr * 0.1 # Proportion chosen across simulations to be in the plot
+    sum_func <- function(v) mean(v)
+    df$x <- apply(df[,paste0('x', 1:rr)], 1, sum_func)
+    df$y <- apply(df[,paste0('sum_y', 1:rr)] / 12, 1, sum_func)
+    df$w <- apply(df[,paste0('sum_w', 1:rr)] / 12, 1, sum_func)
+    df
+  }
+  
   baseline_decisions <- read_csv(paste0(results_dir, "decision_baseline_", baseline_string, ".csv"), col_types = cols()) %>% 
-    mutate(x = x1, sum_y = sum_y1, sum_w = sum_w1) %>% 
-    mutate(y = sum_y / 12, w = sum_w / 12)
+    decision_vector_calc()
   robust_decisions <- read_csv(paste0(results_dir, "decision_nr_", robust_string, ".csv"), col_types = cols()) %>% 
-    mutate(x = x1, sum_y = sum_y1, sum_w = sum_w1) %>% 
-    mutate(y = sum_y / 12, w = sum_w / 12)
+    decision_vector_calc()
   flexible_decisions <- read_csv(paste0(results_dir, 'decision_ar_', flexible_string, ".csv"), col_types = cols()) %>% 
-    mutate(x = x1, sum_y = sum_y1, sum_w = sum_w1) %>% 
-    mutate(y = sum_y / 12, w = sum_w / 12)
+    decision_vector_calc()
   flexible_learning_decisions <- read_csv(paste0(results_dir, 'decision_ar_', flexible_learning_string, ".csv"), col_types = cols()) %>% 
-    mutate(x = x1, sum_y = sum_y1, sum_w = sum_w1) %>% 
-    mutate(y = sum_y / 12, w = sum_w / 12) 
+    decision_vector_calc()
   
   ## Total conservation costs
   baseline_costs <- read_csv(paste0(results_dir, "cost_baseline_", baseline_string, ".csv"), col_types = cols())
@@ -343,11 +348,11 @@ for (i in 4:length(scen_list)) {
     mutate(xmin = stage_num + (name_num-2.5)*.2- 0.05, xmax = stage_num + (name_num-2.5)*.2 + 0.05) 
   
   covenanted_area_ref <- covenanted_area_stages %>%
-    filter(stage == 'Stage 1' & model %in% c('Flexible', 'Flexible & Learning')) %>%
+    filter(stage == 'Stage 1' & model %in% scen_list[3:4]) %>%
     mutate(xmin = xmin + 1, xmax = xmax + 1)
   
   covenanted_area_ref2 <- covenanted_area_stages %>%
-    filter(model %in% c('Flexible', 'Flexible & Learning')) %>%
+    filter(model %in% scen_list[3:4]) %>%
     mutate(xmin = xmin + 1, xmax = xmax + 1)
   
   covenanted_area_stages_plot <- covenanted_area_stages %>%
@@ -407,7 +412,7 @@ for (i in 4:length(scen_list)) {
               aes(x = year, y = ub, color = model), linetype = 3, linewidth = 0.5)+
     geom_line(aes(y = median, color = model), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
-    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% c('Flexible','Flexible & Learning')), aes(y = median, color = model), size = 2)+
+    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
     annotate("text", label = "Stage 1", x = mean(c(2020,year_vec[tt]-5)), y = 1500, hjust = 0.5, vjust = 1, color = 'gray50') +
     annotate("text", label = "Stage 2", x = mean(c(2070,year_vec[tt]-5)), y = 1500, hjust = 0.5, vjust = 1, color = 'gray50') +
     annotate("segment", x = 2020, xend = year_vec[tt]-5, y = 200, yend = 200, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
@@ -486,10 +491,10 @@ for (i in 4:length(scen_list)) {
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank())
   
-  decisions <- list(baseline = cbind(baseline_decisions, area_max = baseline_area$x1), 
-                    robust = cbind(robust_decisions, area_max = robust_area$x1), 
-                    flexible = cbind(flexible_decisions, area_max = flexible_area$x1), 
-                    flexible_learning = cbind(flexible_learning_decisions, area_max = flexible_learning_area$x1)) %>%
+  decisions <- list(baseline = cbind(baseline_decisions), 
+                    robust = cbind(robust_decisions), 
+                    flexible = cbind(flexible_decisions), 
+                    flexible_learning = cbind(flexible_learning_decisions)) %>%
     bind_rows(.id = 'model')
   
   cost_plot_horizontal <- cost_plot + 
@@ -517,20 +522,26 @@ for (i in 4:length(scen_list)) {
                x = 5.9, label = "(ii)", vjust = 0)
   }
   
-  fcn_avg_decisions <- function(decisions, area) {
+  fcn_avg_decisions <- function(decisions, area, summarize = T) {
     id <- decisions$NewPropID
     x_str <- paste0("x", 1:rr)
     y_str <- paste0("sum_y", 1:rr)
-    x <- apply(decisions[x_str] * area, 1, mean)
-    y <- apply(decisions[y_str] * area / 12, 1, mean)
-    data.frame(NewPropID=id,x,y)
+    if (summarize) {
+      x <- apply(decisions[x_str] * area, 1, mean)
+      y <- apply(decisions[y_str] * area / 12, 1, mean)
+      data.frame(NewPropID=id,x,y)
+    } else {
+      x <- decisions[x_str] * area
+      y <- decisions[y_str] * area
+      cbind(id, x, y)
+    }
   }
   
   prop_decisions <- prop_df %>%
     right_join(decisions, by="NewPropID", multiple = 'all') %>%
     pivot_longer(c('x','y'), names_to = 'stage', values_to = 'decision') %>%
     mutate(area = ifelse(stage == 'y' & model == 'flexible_learning', UpperProp * AREA, UpperProp * AREA * decision)) %>%
-    mutate(probability = ifelse(stage == 'y' & model == 'flexible_learning', decision, decision > 0)) %>%
+    mutate(probability = decision) %>%
     mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     filter(decision > 0) %>%
     mutate(stage = factor(stage, c('x','y'), c('Stage 1', 'Stage 2'))) %>%
@@ -539,11 +550,11 @@ for (i in 4:length(scen_list)) {
     filter(area > 20) %>%
     ggplot() +
     geom_sf(data = st_transform(nsw_lga_union, st_crs(prop_centroid))) +
-    geom_point(aes(x = X, y = Y, color = model)) +
+    geom_point(aes(x = X, y = Y, color = model, alpha = decision)) +
     scale_color_colorblind7() +
-    scale_alpha_continuous(range = c(ifelse(min(prop_decisions$probability) > 0.99, 1, 0),1))+
+    scale_alpha_continuous()+
     scale_size_continuous("Offer (ha)", range = c(1,4), limits = c(0, NA), breaks = c(1, 1000, 2000, 3000))+
-    facet_grid(stage~model, switch = 'y') +
+    facet_grid(stage~model, switch = 'y', labeller = label_wrap_gen()) +
     guides(alpha = 'none', fill = 'none', color = 'none') +
     theme_void() +
     theme(strip.text = element_text(margin = margin(2, 2, 2, 2, "pt")))
@@ -554,6 +565,13 @@ for (i in 4:length(scen_list)) {
                         flexible_learning = fcn_avg_decisions(flexible_learning_decisions, baseline_area)) %>%
     bind_rows(.id = 'model')
   
+  avg_decisions_full <- list(baseline = fcn_avg_decisions(baseline_decisions, baseline_area, summarize = F), 
+                             robust = fcn_avg_decisions(robust_decisions, baseline_area, summarize = F), 
+                             flexible = fcn_avg_decisions(flexible_decisions, baseline_area, summarize = F), 
+                             flexible_learning = fcn_avg_decisions(flexible_learning_decisions, baseline_area, summarize = F)) %>%
+    bind_rows(.id = 'model')
+  colnames(avg_decisions_full)[2] <- "NewPropID"
+  
   avg_decisions_lga <- avg_decisions %>%
     left_join(prop_lga_lookup, by = 'NewPropID') %>%
     filter(!is.na(NSW_LGA__2)) %>%
@@ -561,20 +579,22 @@ for (i in 4:length(scen_list)) {
     group_by(model, NSW_LGA__2) %>%
     summarize(stage1 = sum(x), stage2 = sum(y)) %>%
     pivot_longer(c('stage1', 'stage2'), names_to = 'stage', values_to = 'area') %>%
+    filter(area > 0) %>%
+    group_by(model, stage) %>%
+    mutate(proportion = area / sum(area)) %>%
     mutate(stage = factor(stage, c('stage1', 'stage2'), c('Stage 1', 'Stage 2'))) %>%
     mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list))
   
   avg_decisions_lga_model <- nsw_lga %>%
     left_join(avg_decisions_lga, by = 'NSW_LGA__2') %>%
-    filter(!is.na(model)) %>%
-    filter(area > 1)
+    filter(!is.na(model))
   
   prop_cloropleth <- avg_decisions_lga_model %>%
     ggplot() +
     geom_sf(data=nsw_lga, lwd = 0.2, color = 'gray50') +
-    geom_sf(aes(fill = area), lwd = 0.2, color = 'gray50') +
+    geom_sf(aes(fill = proportion), lwd = 0.2, color = 'gray50') +
     facet_grid(stage~model, switch = 'y') +
-    scale_fill_viridis_b("Expected\ncovenant\narea (ha)", trans='log', breaks= c(1,10,100,1000), direction = -1) +
+    scale_fill_viridis_c("Proportion") +
     theme_void()
   
   ## Euler sets
@@ -589,7 +609,7 @@ for (i in 4:length(scen_list)) {
     fit <- euler(c("A" = a, "B" = b, "A&B" = u))
     plot(fit, fills = fills, 
          labels = NULL, 
-         quantities = list(type='percent'),
+         quantities = list(type='percent', cex = .5),
          #legend = list(labels = labs, position = 'bottom')
          )
   }
@@ -756,7 +776,7 @@ plot_line_diff_learning <- function(summary_diff_pct, dodge_width = 0.0005, labe
   p <- summary_diff_pct %>%
     as.data.frame() %>%
     mutate(name = as.numeric(name)) %>%
-    mutate(learning = factor(learning, c('no', 'full'), c('Flexible', 'Flexible & Learning'))) %>%
+    mutate(learning = factor(learning, c('no', 'full'), scen_list[3:4])) %>%
     mutate(median = -median, lb = -lb, ub = -ub) %>%
     ggplot(aes(x = name, y = median, color = learning)) +
     geom_hline(yintercept = 0) 
@@ -789,7 +809,7 @@ dr_flex_diff <- list(
   bind_rows(.id = "learning")
 
 dr_flex_plot <- dr_flex_diff %>%
-  mutate(learning = factor(learning, c('no', 'full'), c('Flexible', 'Flexible & Learning'))) %>%
+  mutate(learning = factor(learning, c('no', 'full'), scen_list[3:4])) %>%
   ggplot(aes(x = as.numeric(name))) +
   geom_vline(xintercept = 7.2/101, linetype = 'longdash', color = 'gray50') +
   annotate("text", x = .02+7.2/101, y = .95, label = "", hjust = 0) +
