@@ -873,5 +873,5 @@ kt_flex_plot <- plot_line_diff_learning(kt_flex_diff, 0.01, "Ecological indicato
 sdr_flex_plot <- plot_line_diff_learning(sdr_flex_diff, 0.001, "Discount rate (1-ρ)")
 k_flex_plot <- plot_line_diff_learning(k_flex_diff, 500, "Policy target (hectares of koala habitat)")
 
-sensitivity_plots <- (k_flex_plot + sdr_flex_plot + tt_flex_plot + kt_flex_plot ) + plot_layout(guides='collect') & theme(legend.position = 'top')
-ggsave("plots/sensitivity_plots.png", sensitivity_plots, units = 'px', width = 3000, height = 1000)
+sensitivity_plots <- (k_flex_plot + sdr_flex_plot + tt_flex_plot + kt_flex_plot ) + plot_layout(guides='collect') & theme(legend.position = 'bottom') & plot_annotation(tag_levels = 'a')
+ggsave("plots/sensitivity_plots.png", sensitivity_plots, units = 'px', width = 3000, height = 2000)
