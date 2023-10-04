@@ -154,14 +154,14 @@ function fcn_subset_realisation_sample_draw(kitl_index_full::DataFrame, subset_i
     return realisation;
 end
 
-function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, discount_rate::Real=0.02, deforestation_risk::Real = 0.1, K::Real = 7000, baseline_conditions=false, recourses = (true,true,false,false))
+function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, discount_rate::Real=0.02, deforestation_risk::Real = 0.1, K::Real = 7000, baseline_conditions=false, get_realisations = false, recourses = (true,true,false,false))
     Random.seed!(54815861) # Ensure all realisation samples are the same
     run_string = "run_k-$(K)_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)_r-$(rr)_sdr-$(discount_rate)_dr-$(deforestation_risk)"
-    if (baseline_conditions && isfile("$(out_dir)/decision_baseline_$(run_string).csv"))
+    if (baseline_conditions && isfile("$(out_dir)/decision_baseline_$(run_string).csv") && !get_realisations)
         println("Run $(run_string) skipped because output is present")
         return
     end
-    if (!baseline_conditions && isfile("$(out_dir)/decision_ar_$(run_string).csv"))
+    if (!baseline_conditions && isfile("$(out_dir)/decision_ar_$(run_string).csv") && !get_realisations)
         println("Run $(run_string) skipped because output is present")
         return
     end
@@ -172,6 +172,12 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     realisation_areas = hcat([realisations[r].area for r in 1:R]...)
     realisation_areas_df = DataFrame(realisation_areas, :auto)
     CSV.write("$(out_dir)/area_$(run_string).csv", realisation_areas_df)
+    if (get_realisations)
+        realisation_cost_1 = hcat([realisations[r].C₁ for r in 1:R]...)
+        realisation_cost_1_df = DataFrame(realisation_cost_1, :auto)
+        CSV.write("$(out_dir)/cost1_$(run_string).csv", realisation_cost_1_df)
+        return
+    end
     worst_case_khab = minimum([minimum(sum(realisations[r].M₂, dims=1)) for r in 1:rr])
     metric_reshape = m -> DataFrame(reshape(permutedims(m, (1, 3, 2)), (size(m, 1) * size(m, 3), size(m, 2))), :auto)
     (no_recourse, add_recourse, terminate_recourse, full_recourse) = recourses
@@ -262,6 +268,9 @@ k_vec = [2500, 4000, 5500, 7000, 8500, 10000, 11500]
 dir = "results/mc_sim_mcmc"
 
 println("Starting sensitivity analysis...")
+
+# Get cost realisations into matrices
+fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, true, true)
 
 # Ignore uncertainty
 fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, true)

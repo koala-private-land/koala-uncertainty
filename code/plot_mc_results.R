@@ -38,7 +38,8 @@ scale_color_colorblind7 = function(...){
 default_params = c(k, sp, tt, kt, ns, rr, sdr, dr)
 base_string <- "run_k-%s_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s"
 
-flexibility_differences <- function(recourse = c(T,T,F,F), loop_vec = 1:10, params = default_params, dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
+flexibility_differences <- function(recourse = c(T,T,F,F), loop_vec = 1:10, params = default_params, 
+                                    dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
   # dep_var starts at 0
   cost_diff_pct <- lapply(loop_vec, function(x) {
     vec_var <- params
@@ -79,7 +80,6 @@ flexibility_differences <- function(recourse = c(T,T,F,F), loop_vec = 1:10, para
   
   return(summary_diff_pct)
 }
-
 
 year_vec <- seq(2000, 2070, by=10)
 
@@ -802,6 +802,8 @@ plot_line_diff_learning <- function(summary_diff_pct, dodge_width = 0.0005, labe
 full_learning <- c(7000,1,6,0.25,1,30,0.02,0.1)
 no_learning <- c(7000,1,6,0.25,12,30,0.02,0.1)
 
+cost_first_stage <- read_csv(paste0(results_dir, 'cost1_', get_run_string(no_learning), '.csv'))
+
 dr_vec <- seq(0.0,1,0.05) %>%
   sapply(function(x) format(round(x, 2), nsmall = 1))
 dr_flex_diff <- list(
@@ -819,14 +821,72 @@ dr_flex_plot <- dr_flex_diff %>%
   geom_point(aes(color = learning, y = -median)) +
   geom_line(aes(color = learning, y = -median)) +
   scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(0,1)) +
-  scale_color_manual("", values = colorpal[3:4]) +
-  scale_fill_manual("", values = colorpal[3:4]) +
+  scale_color_manual("", values = scen_color_def, labels = function(x) str_wrap(x, width = 24)) +
+  scale_fill_manual("", values = scen_color_def, labels = function(x) str_wrap(x, width = 24)) +
   scale_x_continuous("Probability of land clearing") +
   ggpubr::theme_pubr() +
   labs(caption = "Dashed line show 1972-2014 total deforestation in Australia (Evans, 2016)") +
   theme(legend.position = "bottom")
 
-ggsave("plots/plot3.png", dr_flex_plot, width = 1500, height = 1100, units = 'px')
+## Plot change in protected area size in stage 1 relative to stage 2
+dr_share_full_learning <- lapply(dr_vec, function(i) {
+  l <- full_learning
+  l[8] <- i
+  decision <- read_csv(paste0(results_dir, 'decision_ar_', get_run_string(l), '.csv'), col_types = cols())
+  baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
+  x <- colSums(decision[,paste0('x', 1:rr)] * baseline_area)
+  y <- colSums(decision[,paste0('sum_y', 1:rr)]/12 * baseline_area)
+  x / (x+y)
+})
+dr_share_no_learning <- lapply(dr_vec, function(i) {
+  l <- no_learning
+  l[8] <- i
+  decision <- read_csv(paste0(results_dir, 'decision_ar_', get_run_string(l), '.csv'), col_types = cols())
+  baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
+  x <- colSums(decision[,paste0('x', 1:rr)] * baseline_area)
+  y <- colSums(decision[,paste0('sum_y', 1:rr)]/12 * baseline_area)
+  x / (x+y)
+})
+
+dr_share_func <- function(df_list) {
+  a <- sapply(df_list, function(df) {
+    v <- unlist(df)
+    data.frame(median = median(v), lb = min(v), ub = max(v))
+  }) %>%
+    t() %>%
+    as.data.frame()
+  a$dr <- as.numeric(dr_vec)
+  a
+}
+
+dr_share_diff <- list(
+  full = dr_share_func(dr_share_full_learning),
+  no = dr_share_func(dr_share_no_learning)
+) %>%
+  bind_rows(.id = 'learning')
+
+dr_share_plot <- dr_share_diff %>%
+  as.data.frame() %>%
+  mutate(learning = factor(learning, c('no', 'full'), scen_list[3:4])) %>%
+  mutate(median = as.numeric(median), lb = as.numeric(lb), ub = as.numeric(ub)) %>%
+  ggplot(aes(color = learning, fill = learning, x = dr, y = median)) +
+  #geom_ribbon(aes(ymin = lb, ymax = ub), alpha = 0.5) +
+  geom_point() +
+  geom_line() +
+  scale_color_manual("", values = scen_color_def) +
+  scale_fill_manual("", values = scen_color_def) +
+  geom_vline(xintercept = 7.2/101, linetype = 'longdash', color = 'gray50') +
+  scale_y_continuous("Median proportion of land \nprotected in Stage 1", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(0,1)) +
+  ggpubr::theme_pubr() +
+  guides(color = 'none', fill = 'none')+
+  theme(axis.title.x = element_blank(),
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank())
+
+dr_plots <- dr_share_plot / dr_flex_plot + theme(legend.position = 'bottom') & plot_annotation(tag_levels = 'a')
+
+ggsave("plots/plot3.png", dr_plots, width = 1500, height = 2200, units = 'px')
 
 dr_flex_diff %>%
   ggplot(aes(color = learning, fill = learning, x = as.numeric(name))) +
@@ -875,3 +935,6 @@ k_flex_plot <- plot_line_diff_learning(k_flex_diff, 500, "Policy target (hectare
 
 sensitivity_plots <- (k_flex_plot + sdr_flex_plot + tt_flex_plot + kt_flex_plot ) + plot_layout(guides='collect') & theme(legend.position = 'bottom') & plot_annotation(tag_levels = 'a')
 ggsave("plots/sensitivity_plots.png", sensitivity_plots, units = 'px', width = 3000, height = 2000)
+
+
+
