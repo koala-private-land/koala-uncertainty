@@ -780,6 +780,7 @@ plot_line_diff_learning <- function(summary_diff_pct, dodge_width = 0.0005, labe
     mutate(learning = factor(learning, c('no', 'full'), scen_list[3:4])) %>%
     mutate(median = -median, lb = -lb, ub = -ub) %>%
     ggplot(aes(x = name, y = median, color = learning)) +
+    
     geom_hline(yintercept = 0) 
   
   if (connect) {
@@ -791,8 +792,8 @@ plot_line_diff_learning <- function(summary_diff_pct, dodge_width = 0.0005, labe
     geom_errorbar(aes(ymin = lb, ymax = ub), width = dodge_width, position=position_dodge(width=dodge_width)) + 
     scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%")) +
     scale_x_continuous(label) +
-    ggsci::scale_color_d3() +
-    ggsci::scale_fill_d3() +
+    scale_color_manual(values = scen_color_def[3:4]) +
+    scale_fill_manual(values = scen_color_def[3:4]) +
     ggpubr::theme_pubr() +
     theme(legend.title = element_blank())
 }
@@ -853,18 +854,24 @@ kt_flex_diff <- list(
 ) %>%
   bind_rows(.id = 'learning')
 
-ns_flex_diff <- flexibility_differences(params = no_learning, loop_vec = 1:12, dep_var = 4, realisation = 1:10, interval = c(0.05, 0.95))
-
+# Social discount rates
 sdr_flex_diff <- list(
-  full = flexibility_differences(params = no_learning, loop_vec = c(0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 7),
-  no = flexibility_differences(params = full_learning, loop_vec = c(0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 7)
+  no = flexibility_differences(params = no_learning, loop_vec = c(0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 7),
+  full = flexibility_differences(params = full_learning, loop_vec = c(0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05), dep_var = 7)
 ) %>%
   bind_rows(.id = 'learning')
 
+# Policy targets
+k_flex_diff <- list(
+  full = flexibility_differences(params = full_learning, loop_vec = 1000+1500*(0:7), dep_var = 1),
+  no = flexibility_differences(params = no_learning, loop_vec = 1000+1500*(0:7), dep_var = 1)
+) %>%
+  bind_rows(.id = 'learning')
 
 tt_flex_plot <- plot_line_diff_learning(mutate(tt_flex_diff, name = 2000+as.numeric(name)*10), 0.2, "Year for new investment (t')")
-kt_flex_plot <- plot_line_diff_learning(kt_flex_diff, 0.005, "Ecological indicator cut-off")
+kt_flex_plot <- plot_line_diff_learning(kt_flex_diff, 0.01, "Ecological indicator cut-off")
 sdr_flex_plot <- plot_line_diff_learning(sdr_flex_diff, 0.001, "Discount rate (1-ρ)")
+k_flex_plot <- plot_line_diff_learning(k_flex_diff, 500, "Policy target (hectares of koala habitat)")
 
-sensitivity_plots <- (tt_flex_plot | kt_flex_plot | sdr_flex_plot) + plot_layout(guides='collect') & theme(legend.position = 'top')
+sensitivity_plots <- (k_flex_plot + sdr_flex_plot + tt_flex_plot + kt_flex_plot ) + plot_layout(guides='collect') & theme(legend.position = 'top')
 ggsave("plots/sensitivity_plots.png", sensitivity_plots, units = 'px', width = 3000, height = 1000)
