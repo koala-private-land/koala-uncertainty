@@ -554,10 +554,10 @@ for (i in 4:length(scen_list)) {
     scale_color_colorblind7() +
     scale_alpha_continuous()+
     scale_size_continuous("Offer (ha)", range = c(1,4), limits = c(0, NA), breaks = c(1, 1000, 2000, 3000))+
-    facet_grid(stage~model, switch = 'y', labeller = label_wrap_gen()) +
+    facet_grid(stage~model, switch = 'y', labeller = label_wrap_gen(18)) +
     guides(alpha = 'none', fill = 'none', color = 'none') +
     theme_void() +
-    theme(strip.text = element_text(margin = margin(3,3,3,3, "pt")))
+    theme(strip.text = element_text(margin = margin(0,10,0,10, "pt")))
   
   avg_decisions <- list(baseline = fcn_avg_decisions(baseline_decisions, baseline_area), 
                         robust = fcn_avg_decisions(robust_decisions, baseline_area), 
@@ -674,12 +674,12 @@ for (i in 4:length(scen_list)) {
 # Save plots ------
 
 ggsave("plots/plot1.png", plot_list[[4]]$plot1, width = 2800, height = 2300, units = 'px')
-ggsave("plots/plot1a.png", plot_list[[4]]$plot1a, width = 2800, height = 1800, units = 'px')
+ggsave("plots/plot1a.png", plot_list[[4]]$plot1a, width = 2400, height = 1800, units = 'px')
 ggsave("plots/plot1b.png", plot_list[[4]]$plot1b, width = 2800, height = 1500, units = 'px')
 ggsave("plots/plot1b2.png", plot_list[[4]]$plot1b2, width = 3000, height = 1800, units = 'px')
 
 ggsave("plots/plot1.pdf", plot_list[[4]]$plot1, width = 2800, height = 2300, units = 'px')
-ggsave("plots/plot1a.pdf", plot_list[[4]]$plot1a, width = 2800, height = 1800, units = 'px')
+ggsave("plots/plot1a.pdf", plot_list[[4]]$plot1a, width = 2600, height = 1800, units = 'px')
 ggsave("plots/plot1b.pdf", plot_list[[4]]$plot1b, width = 2800, height = 1500, units = 'px')
 ggsave("plots/plot1b2.pdf", plot_list[[4]]$plot1b2, width = 3000, height = 1800, units = 'px')
 saveRDS(plot_list, file = "plots/plot_list.rds")
