@@ -684,6 +684,14 @@ ggsave("plots/plot1b.pdf", plot_list[[4]]$plot1b, width = 2800, height = 1500, u
 ggsave("plots/plot1b2.pdf", plot_list[[4]]$plot1b2, width = 3000, height = 1800, units = 'px')
 saveRDS(plot_list, file = "plots/plot_list.rds")
 
+# Export plots individually
+ggsave("plots/aus_plot.pdf", aus_plot, width = 1200, height = 1200, units = 'px')
+ggsave("plots/prop_decisions.pdf", prop_decisions_plot, width = 1600, height = 1200, units = 'px')
+euler_plot <- (as.ggplot(euler1) + as.ggplot(euler2) + as.ggplot(euler3) + cowplot::get_legend(end_range_plot) + plot_layout(ncol = 1))
+ggsave("plots/euler.pdf", euler_plot, width = 600, height = 1500, units = 'px')
+ggsave("plots/cost_plot.pdf", cost_plot_horizontal, width = 1200, height = 800, units = 'px')
+ggsave("plots/khab_plot.pdf", year_split_inset + end_range_plot + plot_layout(widths = c(1,0.2), guides = 'collect') & theme(legend.position = 'bottom'), width = 2400, height = 1200, units = 'px')
+
 ## Flexibility types plot --------
 recourse_types <- c('(A)', '(E)', '(A/E)')
 flexibility_diff_ns <- flexibility_differences(loop_vec = c(1,3,12), dep_var = 5) 
