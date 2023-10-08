@@ -557,7 +557,7 @@ for (i in 4:length(scen_list)) {
     facet_grid(stage~model, switch = 'y', labeller = label_wrap_gen(18)) +
     guides(alpha = 'none', fill = 'none', color = 'none') +
     theme_void() +
-    theme(strip.text = element_text(margin = margin(0,10,0,10, "pt")))
+    theme(strip.text = element_text(margin = margin(5,10,5,10, "pt")))
   
   avg_decisions <- list(baseline = fcn_avg_decisions(baseline_decisions, baseline_area), 
                         robust = fcn_avg_decisions(robust_decisions, baseline_area), 
