@@ -89,6 +89,7 @@ year_vec <- seq(2000, 2070, by=10)
 load('plots/shapes.RData')
 
 aus_plot <- ggplot() +
+  geom_sf(data = aus_border_union, fill = NA, color = )
   geom_sf(data = aus_border, fill = 'gray80', color = 'white') +
   geom_sf(data = nsw_lga_union, size = 0.5, color = NA, fill = '#FFD580') +
   geom_rect(aes(xmin = nsw_bbox$xmin - bbox_buffer, 
@@ -688,7 +689,9 @@ saveRDS(plot_list, file = "plots/plot_list.rds")
 ggsave("plots/aus_plot.pdf", aus_plot, width = 1200, height = 1200, units = 'px')
 ggsave("plots/prop_decisions.pdf", prop_decisions_plot, width = 1600, height = 1200, units = 'px')
 euler_plot <- (as.ggplot(euler1) + as.ggplot(euler2) + as.ggplot(euler3) + plot_layout(ncol = 1))
+euler_plot_horizontal <- (as.ggplot(euler1) + as.ggplot(euler2) + as.ggplot(euler3) + plot_layout(nrow = 1))
 ggsave("plots/euler.pdf", euler_plot, width = 600, height = 1200, units = 'px')
+ggsave("plots/euler_horizontal.pdf", euler_plot_horizontal, width = 1200, height = 300, units = 'px')
 ggsave("plots/cost_plot.pdf", cost_plot_horizontal, width = 1200, height = 800, units = 'px')
 ggsave("plots/khab_plot.pdf", year_split_inset + end_range_plot + plot_layout(widths = c(1,0.2), guides = 'collect') & theme(legend.position = 'bottom'), width = 2400, height = 1500, units = 'px')
 ggsave("plots/legend.pdf", cowplot::get_legend(end_range_plot), width = 600, height = 400, units = 'px')

@@ -12,6 +12,7 @@ prop_df <- st_drop_geometry(prop_centroid) %>%
 ## Spatial plots
 aus_border <- geodata::gadm(country = "AUS", level = 1, path = "data/", resolution = 2) %>%
   sf::st_as_sf()
+aus_border_union <- aus_border %>% st_set_precision(1e6) %>% st_make_valid() %>% st_union() %>% plot()
 nsw_lga <- st_read( "data/planning_units.gdb", layer = 'nsw_lga_pu_all')
 nsw_lga_union <- nsw_lga%>%
   st_union() %>%
