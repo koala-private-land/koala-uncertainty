@@ -36,4 +36,4 @@ remp_plot <- ggplot() +
   facet_wrap(~lyr) +
   theme_void()
 
-ggsave("plots/remp_plot.png", remp_plot, width = 3000, height = 2000, units = 'px')
+ggsave("plots/remp_plot.png", remp_plot, width = 3000, height = 3000, units = 'px')

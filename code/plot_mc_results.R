@@ -89,9 +89,9 @@ year_vec <- seq(2000, 2070, by=10)
 load('plots/shapes.RData')
 
 aus_plot <- ggplot() +
-  geom_sf(data = aus_border_union, fill = NA, color = )
-  geom_sf(data = aus_border, fill = 'gray80', color = 'white') +
-  geom_sf(data = nsw_lga_union, size = 0.5, color = NA, fill = '#FFD580') +
+  #geom_sf(data = aus_border_union, fill = NA) +
+  geom_sf(data = aus_border, fill = 'gray80') +
+  geom_sf(data = nsw_lga_union, size = 0.5, fill = '#FFD580') +
   geom_rect(aes(xmin = nsw_bbox$xmin - bbox_buffer, 
                 xmax = nsw_bbox$xmax + bbox_buffer, 
                 ymin = nsw_bbox$ymin - bbox_buffer, 
@@ -688,6 +688,7 @@ saveRDS(plot_list, file = "plots/plot_list.rds")
 # Export plots individually
 ggsave("plots/aus_plot.pdf", aus_plot, width = 1200, height = 1200, units = 'px')
 ggsave("plots/prop_decisions.pdf", prop_decisions_plot, width = 1600, height = 1200, units = 'px')
+ggsave("plots/prop_decisions_rightstrip.pdf", prop_decisions_plot + facet_grid(stage~model, labeller = label_wrap_gen(18)), width = 1600, height = 1200, units = 'px')
 euler_plot <- (as.ggplot(euler1) + as.ggplot(euler2) + as.ggplot(euler3) + plot_layout(ncol = 1))
 euler_plot_horizontal <- (as.ggplot(euler1) + as.ggplot(euler2) + as.ggplot(euler3) + plot_layout(nrow = 1))
 ggsave("plots/euler.pdf", euler_plot, width = 600, height = 1200, units = 'px')
@@ -845,25 +846,27 @@ dr_share_full_learning <- lapply(dr_vec, function(i) {
   l <- full_learning
   l[8] <- i
   decision <- read_csv(paste0(results_dir, 'decision_ar_', get_run_string(l), '.csv'), col_types = cols())
-  baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
-  x <- colSums(decision[,paste0('x', 1:rr)] * baseline_area)
-  y <- colSums(decision[,paste0('sum_y', 1:rr)]/12 * baseline_area)
-  x / (x+y)
+  #baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
+  cost_first_stage <- read_csv(paste0(results_dir, "cost1_", get_run_string(l), ".csv"), col_types = cols()) 
+  x <- colSums(decision[,paste0('x', 1:rr)] * cost_first_stage)
+  #y <- colSums(decision[,paste0('sum_y', 1:rr)]/12 * baseline_area)
+  #x / (x+y)
 })
 dr_share_no_learning <- lapply(dr_vec, function(i) {
   l <- no_learning
   l[8] <- i
   decision <- read_csv(paste0(results_dir, 'decision_ar_', get_run_string(l), '.csv'), col_types = cols())
-  baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
-  x <- colSums(decision[,paste0('x', 1:rr)] * baseline_area)
-  y <- colSums(decision[,paste0('sum_y', 1:rr)]/12 * baseline_area)
-  x / (x+y)
+  #baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
+  cost_first_stage <- read_csv(paste0(results_dir, "cost1_", get_run_string(l), ".csv"), col_types = cols()) 
+  x <- colSums(decision[,paste0('x', 1:rr)] * cost_first_stage)
+  #y <- colSums(decision[,paste0('sum_y', 1:rr)]/12 * baseline_area)
+  #x / (x+y)
 })
 
-dr_share_func <- function(df_list) {
+dr_share_func <- function(df_list, interval=c(0.05, 0.95)) {
   a <- sapply(df_list, function(df) {
     v <- unlist(df)
-    data.frame(median = median(v), lb = min(v), ub = max(v))
+    data.frame(median = median(v), lb = quantile(v, interval[1]), ub = quantile(v, interval[2]))
   }) %>%
     t() %>%
     as.data.frame()
@@ -881,24 +884,25 @@ dr_share_plot <- dr_share_diff %>%
   as.data.frame() %>%
   mutate(learning = factor(learning, c('no', 'full'), scen_list[3:4])) %>%
   mutate(median = as.numeric(median), lb = as.numeric(lb), ub = as.numeric(ub)) %>%
-  ggplot(aes(color = learning, fill = learning, x = dr, y = median)) +
-  #geom_ribbon(aes(ymin = lb, ymax = ub), alpha = 0.5) +
-  geom_point() +
-  geom_line() +
+  ggplot(aes( fill = learning, x = dr, y = median)) +
+  #geom_ribbon(aes(ymin = lb, ymax = ub), alpha = 0.4) +
+  geom_point(aes(color = learning)) +
+  geom_line(aes(color = learning)) +
   scale_color_manual("", values = scen_color_def) +
   scale_fill_manual("", values = scen_color_def) +
   geom_vline(xintercept = 7.2/101, linetype = 'longdash', color = 'gray50') +
-  scale_y_continuous("Median proportion of land \nprotected in Stage 1", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(0,1)) +
+  scale_y_continuous("Stage 1 cost (median)", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), limits = c(0, 100e6)) +
   ggpubr::theme_pubr() +
   guides(color = 'none', fill = 'none')+
   theme(axis.title.x = element_blank(),
         axis.line.x = element_blank(),
         axis.ticks.x = element_blank(),
         axis.text.x = element_blank())
-
+dr_share_plot
 dr_plots <- dr_share_plot / dr_flex_plot + theme(legend.position = 'bottom') & plot_annotation(tag_levels = 'a')
 
-ggsave("plots/plot3.png", dr_plots, width = 1500, height = 2200, units = 'px')
+ggsave("plots/plot3.png", dr_plots, width = 1500, height = 1750, units = 'px')
+
 
 dr_flex_diff %>%
   ggplot(aes(color = learning, fill = learning, x = as.numeric(name))) +
