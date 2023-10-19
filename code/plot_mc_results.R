@@ -847,7 +847,7 @@ dr_share_full_learning <- lapply(dr_vec, function(i) {
   l[8] <- i
   decision <- read_csv(paste0(results_dir, 'decision_ar_', get_run_string(l), '.csv'), col_types = cols())
   #baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
-  cost_first_stage <- read_csv(paste0(results_dir, "cost1_", get_run_string(l), ".csv"), col_types = cols()) 
+  cost_first_stage <- read_csv(paste0(results_dir, "cost_full_", get_run_string(l), ".csv"), col_types = cols()) 
   x <- colSums(decision[,paste0('x', 1:rr)] * cost_first_stage)
   #y <- colSums(decision[,paste0('sum_y', 1:rr)]/12 * baseline_area)
   #x / (x+y)
@@ -857,7 +857,7 @@ dr_share_no_learning <- lapply(dr_vec, function(i) {
   l[8] <- i
   decision <- read_csv(paste0(results_dir, 'decision_ar_', get_run_string(l), '.csv'), col_types = cols())
   #baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
-  cost_first_stage <- read_csv(paste0(results_dir, "cost1_", get_run_string(l), ".csv"), col_types = cols()) 
+  cost_first_stage <- read_csv(paste0(results_dir, "cost_full_", get_run_string(l), ".csv"), col_types = cols()) 
   x <- colSums(decision[,paste0('x', 1:rr)] * cost_first_stage)
   #y <- colSums(decision[,paste0('sum_y', 1:rr)]/12 * baseline_area)
   #x / (x+y)
@@ -891,7 +891,7 @@ dr_share_plot <- dr_share_diff %>%
   scale_color_manual("", values = scen_color_def) +
   scale_fill_manual("", values = scen_color_def) +
   geom_vline(xintercept = 7.2/101, linetype = 'longdash', color = 'gray50') +
-  scale_y_continuous("Stage 1 cost (median)", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), limits = c(0, 100e6)) +
+  scale_y_continuous("Cost from properties \nplaced in Stage 1 (median)", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), limits = c(0, 120e6)) +
   ggpubr::theme_pubr() +
   guides(color = 'none', fill = 'none')+
   theme(axis.title.x = element_blank(),
