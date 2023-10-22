@@ -838,7 +838,7 @@ dr_flex_plot <- dr_flex_diff %>%
   scale_fill_manual("", values = scen_color_def, labels = function(x) str_wrap(x, width = 24)) +
   scale_x_continuous("Probability of land clearing") +
   ggpubr::theme_pubr() +
-  labs(caption = "Dashed line show 1972-2014 total deforestation in Australia (Evans, 2016)") +
+  labs(caption = "Dashed line show NSW deforestation risk\nextrapolated from historical data") +
   theme(legend.position = "bottom")
 
 ## Plot change in protected area size in stage 1 relative to stage 2
@@ -890,8 +890,8 @@ dr_share_plot <- dr_share_diff %>%
   geom_line(aes(color = learning)) +
   scale_color_manual("", values = scen_color_def) +
   scale_fill_manual("", values = scen_color_def) +
-  geom_vline(xintercept = 7.2/101, linetype = 'longdash', color = 'gray50') +
-  scale_y_continuous("Cost from properties \nplaced in Stage 1 (median)", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), limits = c(0, 120e6)) +
+  geom_vline(xintercept = 0.0599, linetype = 'longdash', color = 'gray50') +
+  scale_y_continuous("Cost from protection \nplaced in Stage 1 (median)", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), limits = c(0, 150e6)) +
   ggpubr::theme_pubr() +
   guides(color = 'none', fill = 'none')+
   theme(axis.title.x = element_blank(),
