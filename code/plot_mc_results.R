@@ -222,8 +222,8 @@ for (i in 4:length(scen_list)) {
     filter(model %in% scen_list_i) %>%
     ggplot(aes(x = name_num, y = median, fill = model)) +
     geom_hline(yintercept = 7000) +
-    geom_rect(aes(ymin = lb, ymax = ub, xmin = name_num - 0.4, xmax = name_num + 0.4), color = 'gray80', linewidth = 0.5)+
-    geom_segment(aes(y = median, yend = median, x = name_num-0.4, xend = name_num+0.4), color = 'white', linewidth = 0.5) +
+    geom_rect(aes(ymin = lb, ymax = ub, xmin = name_num - 0.4, xmax = name_num + 0.4), alpha = 0.5, color = NA)+
+    geom_segment(aes(y = median, yend = median, x = name_num-0.4, xend = name_num+0.4, color=model), linewidth = 1) +
     #geom_text(aes(y = 0, x = name_num, label = model, color = model), size = 4, vjust = 0.5) +
     coord_cartesian(ylim = c(0, 18000)) +
     guides(color = 'none', fill = guide_legend(direction = 'vertical')) +
@@ -231,7 +231,7 @@ for (i in 4:length(scen_list)) {
     scale_x_continuous(NULL, labels = c('(i)','(ii)','(iii)','(iv)'), breaks = c(1,2,3,4)) +
     scale_fill_manual("Strategy", values = scen_color_def, labels = add_romans) +
     scale_color_manual("Strategy", values = scen_color_def, labels = add_romans) +
-    guides(fill = guide_legend(override.aes = list(color = NA))) +
+    guides(fill = guide_legend(override.aes = list(color = NA, alpha=1))) +
     ggpubr::theme_pubr() +
     theme(legend.position = 'right')
   
@@ -438,8 +438,8 @@ for (i in 4:length(scen_list)) {
     geom_line(aes(y = median, color = model, alpha = "Median"), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
     geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
-    annotate("text", label = "Stage \n1", x = mean(c(2020,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
-    annotate("text", label = "Stage \n2", x = mean(c(2070,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
+    annotate("text", label = "Stage\n1", x = mean(c(2020,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
+    annotate("text", label = "Stage\n2", x = mean(c(2070,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
     #annotate("segment", x = 2020, xend = year_vec[tt]-1, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
     #annotate("segment", x = 2070, xend = year_vec[tt]-1, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
     scale_y_continuous("Policy target", labels = function(x) paste0(x*100 / 7000, '%'), breaks = ((0:8)*50) * 70) +
@@ -496,7 +496,7 @@ for (i in 4:length(scen_list)) {
     ggplot(aes(x = name_num)) +
     #geom_vline(xintercept = median(unlist(flexible_costs)), linetype = 2) +
     #geom_vline(xintercept = median(unlist(flexible_learning_costs)), linetype = 2) +
-    geom_segment(aes(y = lb, yend = ub, x = name_num, xend = name_num, color = model), size = 1) 
+    geom_segment(aes(y = lb, yend = ub, x = name_num, xend = name_num, color = model), alpha = 0.5, size = 2) 
   
   if (scen_list[3] %in% scen_list_i) {
     cost_plot <- cost_plot +
@@ -676,6 +676,7 @@ for (i in 4:length(scen_list)) {
   "
   
   fcn_euler_add_legend <- function(vec) {
+    return()
     df <- data.frame(x = c(-Inf, Inf), y = c(-Inf, -Inf), hjust=c(0,1), vjust=c(0,0), label = vec)
     list(geom_label(data = df, aes(x=x,y=y,hjust=hjust,vjust=vjust,label=str_wrap(label, width=14)), 
                     label.padding=unit(.25, "lines"), size = 2),
@@ -692,7 +693,7 @@ for (i in 4:length(scen_list)) {
   plot1a <- (wrap_elements(plot=aus_plot)+ggtitle('Study area')) + 
     (wrap_elements(plot=prop_decisions_plot)+ggtitle("Covenant locations")) + 
     (wrap_elements(plot=eulers)+ggtitle("Overlap in Stage 1 covenants")) +
-    plot_layout(design = layout_1a, heights = c(1,0.5)) & plot_annotation(tag_levels = 'a')
+    plot_layout(design = layout_1a, heights = c(1,0.3)) & plot_annotation(tag_levels = 'a')
   
   layout_1b <- "
   AB#
@@ -707,8 +708,8 @@ for (i in 4:length(scen_list)) {
   CD
   "
   
-  plot1b2 <- (year_split_inset+ggtitle('Conservation outcomes')) + (end_range_plot+ggtitle('Conservation\noutcomes by 2070')) + (cost_plot_horizontal+ggtitle('Total cost')) + guide_area()+
-    plot_layout(design = layout_1b2, heights = c(1,1), widths = c(1,0.3), guides = 'collect') & plot_annotation(tag_levels = list(c('a','b','c','')))
+  plot1b2 <- (year_split_inset+ggtitle('Projected conservation outcomes')) + (end_range_plot+ggtitle('Projected outcomes (2070)')) + (cost_plot_horizontal+ggtitle('Total cost')) + guide_area()+
+    plot_layout(design = layout_1b2, heights = c(1,1), widths = c(1,0.4), guides = 'collect') & plot_annotation(tag_levels = list(c('a','b','c','')))
   
   # Save plots to list
   plot_list[[i]] <- list(
@@ -731,7 +732,7 @@ for (i in 4:length(scen_list)) {
 ggsave("plots/plot1.png", plot_list[[4]]$plot1, width = 2800, height = 2300, units = 'px')
 ggsave("plots/plot1a.png", plot_list[[4]]$plot1a, width = 2700, height = 2000, units = 'px')
 ggsave("plots/plot1b.png", plot_list[[4]]$plot1b, width = 2800, height = 1500, units = 'px')
-ggsave("plots/plot1b2.png", plot_list[[4]]$plot1b2, width = 3000, height = 1800, units = 'px')
+ggsave("plots/plot1b2.png", plot_list[[4]]$plot1b2, width = 3200, height = 1800, units = 'px')
 
 ggsave("plots/plot1.pdf", plot_list[[4]]$plot1, width = 2800, height = 2300, units = 'px')
 ggsave("plots/plot1a.pdf", plot_list[[4]]$plot1a, width = 2600, height = 1800, units = 'px')
