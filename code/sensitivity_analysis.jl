@@ -176,10 +176,10 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     realisation_cost_1_df = DataFrame(realisation_cost_1, :auto)
     CSV.write("$(out_dir)/cost1_$(run_string).csv", realisation_cost_1_df)
 
+    # Write full costs of conservation covenant to table
     realisation_cost_full = hcat([realisations[r].C₁ + realisations[r].C₂ for r in 1:R]...)
     realisation_cost_full_df = DataFrame(realisation_cost_full, :auto)
     CSV.write("$(out_dir)/cost_full_$(run_string).csv", realisation_cost_full_df)
-    return
     
     worst_case_khab = minimum([minimum(sum(realisations[r].M₂, dims=1)) for r in 1:rr])
     metric_reshape = m -> DataFrame(reshape(permutedims(m, (1, 3, 2)), (size(m, 1) * size(m, 3), size(m, 2))), :auto)

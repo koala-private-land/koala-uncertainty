@@ -154,13 +154,26 @@ for (i in 4:length(scen_list)) {
     mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     filter(model %in% scen_list_i)
   
+  metric_df <- list(baseline = baseline_metric, robust = robust_metric, flexible = flexible_metric, flexible_learning = flexible_learning_metric) %>%
+    lapply(\(x) unlist(x$x8)) %>%
+    bind_cols() %>%
+    pivot_longer(all_of(c('baseline', 'robust', 'flexible', 'flexible_learning')), names_to = 'model') %>%
+    mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list))
+  
+  year_end_histogram <- metric_df %>%
+    ggplot(aes(y = value, fill = model)) +
+    geom_histogram(bins=30, color = 'gray50') +
+    facet_grid(cols = vars(model)) +
+    coord_cartesian(ylim = c(0, 18000)) +
+    theme_void()
+  
   year_trend_plot <- baseline_robust_df %>%
     filter(year >= 2020) %>%
     filter(model %in% scen_list_i) %>%
     ggplot(aes(x=year)) +
     geom_hline(yintercept = 7000) +
     geom_vline(xintercept = 2020, linetype = 2, color = 'gray50') +
-    geom_vline(xintercept = year_vec[tt]-5, linetype = 2, color = 'gray50') +
+    geom_vline(xintercept = year_vec[tt]-1, linetype = 2, color = 'gray50') +
     geom_ribbon(aes(ymin = lb, ymax = ub, fill = model), alpha = 0.25) +
     geom_line(aes(y = median, color = model), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
@@ -173,24 +186,32 @@ for (i in 4:length(scen_list)) {
     guides(color = 'none', fill = 'none')+
     ggpubr::theme_pubr()
   
+  add_romans <- function(x) str_wrap(paste0("(", tolower(as.roman(match(x, scen_list))), ') ', x), width = 24)
+  
+  shortfall_df <- data.frame(x = 2050, xend = 2050, yend = 791.8673, y = 7000, model = scen_list[1])
+  shortfall_df$model <- factor(shortfall_df$model, levels = scen_list)
   year_trend_split_plot <- baseline_robust_df %>%
     filter(year >= 2020) %>%
     filter(model %in% scen_list_i) %>%
     ggplot(aes(x=year)) +
     geom_hline(yintercept = 7000) +
     geom_vline(xintercept = 2020, linetype = 2, color = 'gray50') +
-    geom_vline(xintercept = year_vec[tt]-5, linetype = 2, color = 'gray50') +
+    geom_vline(xintercept = year_vec[tt]-1, linetype = 2, color = 'gray50') +
     geom_ribbon(aes(ymin = lb, ymax = ub, fill = model), alpha = 0.25) +
     geom_line(aes(y = median, color = model), linewidth = 1) +
+    #geom_segment(data=shortfall_df, 
+    #             aes(x = x, xend = xend, y = y, yend = yend),
+    #             size = .75, arrow = arrow(length = unit(0.2, "cm")),
+    #             color = 'gray20')+
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
     geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
     scale_y_continuous("Koala habitat (ha)") +
     scale_x_continuous("Year") +
-    scale_color_colorblind7() +
-    scale_fill_colorblind7() +
+    scale_color_colorblind7(labels = add_romans) +
+    scale_fill_colorblind7(labels = add_romans) +
     facet_grid(~model, labeller = label_wrap_gen()) +
     coord_cartesian(xlim = c(2020,2070), ylim = c(0, 18000)) +
-    guides(color = 'none', fill = 'none')+
+    guides(color = 'none', fill = guide_legend('',override.aes=list(alpha= 1)))+
     ggpubr::theme_pubr()
   
   end_range_plot <- baseline_robust_df %>%
@@ -205,11 +226,14 @@ for (i in 4:length(scen_list)) {
     geom_segment(aes(y = median, yend = median, x = name_num-0.4, xend = name_num+0.4), color = 'white', linewidth = 0.5) +
     #geom_text(aes(y = 0, x = name_num, label = model, color = model), size = 4, vjust = 0.5) +
     coord_cartesian(ylim = c(0, 18000)) +
-    guides(color = 'none') +
-    scale_fill_manual("Strategy",values = scen_color_def, labels = function(x) str_wrap(x, width = 24)) +
-    scale_color_manual("Strategy",values = scen_color_def, labels = function(x) str_wrap(x, width = 24)) +
-    theme_void() +
-    theme(axis.line.x = element_blank())
+    guides(color = 'none', fill = guide_legend(direction = 'vertical')) +
+    scale_y_continuous("Policy target", labels = function(x) paste0(x*100 / 7000, '%'), breaks = ((0:8)*50) * 70) +
+    scale_x_continuous(NULL, labels = c('(i)','(ii)','(iii)','(iv)'), breaks = c(1,2,3,4)) +
+    scale_fill_manual("Strategy", values = scen_color_def, labels = add_romans) +
+    scale_color_manual("Strategy", values = scen_color_def, labels = add_romans) +
+    guides(fill = guide_legend(override.aes = list(color = NA))) +
+    ggpubr::theme_pubr() +
+    theme(legend.position = 'right')
   
   ## Import decision vectors
   decision_vector_calc <- function(df) {
@@ -313,7 +337,7 @@ for (i in 4:length(scen_list)) {
     filter(model %in% scen_list_i) %>%
     ggplot(aes(x = year)) +
     geom_vline(xintercept = 2020, linetype = 2, color = 'gray50') +
-    geom_vline(xintercept = year_vec[tt]-5, linetype = 2, color = 'gray50') +
+    geom_vline(xintercept = year_vec[tt]-1, linetype = 2, color = 'gray50') +
     geom_ribbon(aes(fill = model, ymin = lb, ymax = ub), alpha = 0.25) +
     geom_line(aes(color = model, y = median), size = 1) +
     #geom_line(aes(color = model, y = median)) +
@@ -324,8 +348,8 @@ for (i in 4:length(scen_list)) {
     coord_cartesian(xlim = c(2020,2070), ylim = c(3000, 15000)) +
     guides(color = 'none', fill = 'none')+
     ggpubr::theme_pubr() +
-    annotate('text', x = mean(c(year_vec[3], year_vec[tt]-5)), y = 15000, color = 'black', label = 'Stage 1', vjust=1) +
-    annotate('text', x = mean(c(year_vec[tt]-5, year_vec[length(year_vec)])) , y = 15000, color = 'black', label = 'Stage 2', vjust=1) +
+    annotate('text', x = mean(c(year_vec[3], year_vec[tt]-1)), y = 15000, color = 'black', label = 'Stage 1', vjust=1) +
+    annotate('text', x = mean(c(year_vec[tt]-1, year_vec[length(year_vec)])) , y = 15000, color = 'black', label = 'Stage 2', vjust=1) +
     theme(axis.title.x = element_blank(),
           axis.line.x = element_blank(),
           axis.ticks.x = element_blank(),
@@ -405,19 +429,19 @@ for (i in 4:length(scen_list)) {
     ggplot(aes(x=year)) +
     geom_hline(yintercept = 7000) +
     geom_vline(xintercept = 2020, linetype = 1, color = 'gray50') +
-    geom_vline(xintercept = year_vec[tt]-5, linetype = 1, color = 'gray50') +
-    geom_ribbon(aes(ymin = lb, ymax = ub, fill = model), alpha = 0.5) +
-    geom_line(data = filter(covenanted_area_stages_full, year >=2020), 
-              aes(x = year, y = lb, color = model), linetype = 3, linewidth = 0.5)+
-    geom_line(data = filter(covenanted_area_stages_full, year >=2020), 
-              aes(x = year, y = ub, color = model), linetype = 3, linewidth = 0.5)+
-    geom_line(aes(y = median, color = model), linewidth = 1) +
+    geom_vline(xintercept = year_vec[tt]-1, linetype = 1, color = 'gray50') +
+    geom_ribbon(aes(ymin = lb, ymax = ub, fill = model, alpha = "90% interval")) +
+    #geom_line(data = filter(covenanted_area_stages_full, year >=2020), 
+    #          aes(x = year, y = lb, color = model), linetype = 3, linewidth = 0.5)+
+    #geom_line(data = filter(covenanted_area_stages_full, year >=2020), 
+    #          aes(x = year, y = ub, color = model), linetype = 3, linewidth = 0.5)+
+    geom_line(aes(y = median, color = model, alpha = "Median"), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
     geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
-    annotate("text", label = "Stage 1", x = mean(c(2020,year_vec[tt]-5)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
-    annotate("text", label = "Stage 2", x = mean(c(2070,year_vec[tt]-5)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
-    annotate("segment", x = 2020, xend = year_vec[tt]-5, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
-    annotate("segment", x = 2070, xend = year_vec[tt]-5, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
+    annotate("text", label = "Stage \n1", x = mean(c(2020,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
+    annotate("text", label = "Stage \n2", x = mean(c(2070,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
+    #annotate("segment", x = 2020, xend = year_vec[tt]-1, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
+    #annotate("segment", x = 2070, xend = year_vec[tt]-1, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
     scale_y_continuous("Policy target", labels = function(x) paste0(x*100 / 7000, '%'), breaks = ((0:8)*50) * 70) +
     scale_x_continuous("Year", breaks = c(2020, 2040, 2060)) +
     scale_color_manual(values = scen_color_def) +
@@ -426,7 +450,17 @@ for (i in 4:length(scen_list)) {
     coord_cartesian(xlim = c(2020,2070), ylim = c(0, 18000)) +
     guides(color = 'none', fill = 'none') +
     ggpubr::theme_pubr() +
-    theme(strip.background = element_blank())
+    scale_alpha_manual(name = NULL,
+                       values = c(1, 0.5, NA),
+                       breaks = c("Median", "90% interval"),
+                       guide = guide_legend(direction = 'vertical', 
+                                            override.aes = list(linetype = c(1,0),
+                                                                shape = c(NA, NA),
+                                                                fill = c(NA, 'black'),
+                                                                color = c('black',"black"),
+                                                                size = 0,
+                                                                stroke = 0) ) ) +
+    theme(strip.background = element_blank(), legend.position = 'right')
   
   ## Cost plot ----------
   cost_list <- list(baseline = baseline_costs, robust = robust_costs, flexible = flexible_costs, flexible_learning = flexible_learning_costs)
@@ -512,16 +546,20 @@ for (i in 4:length(scen_list)) {
     
     cost_plot_horizontal <- cost_plot_horizontal +
       annotate('text', y = mean(c(median(unlist(flexible_costs)),median(unlist(robust_costs)))),
-               x = 4.9, label = "(i)", vjust = 0)
+               x = 4.9, label = "*", vjust = 0)
   }
   
   if (scen_list[4] %in% scen_list_i) {
     cost_plot_vertical <- cost_plot_vertical +
-      annotate('text', y = median(unlist(flexible_learning_costs)) - 1e7, x = 5.9, label = "(ii)", hjust = 1)
+      annotate('text', y = median(unlist(flexible_learning_costs)) - 1e7, x = 5.9, label = "**", hjust = 1)
     cost_plot_horizontal <- cost_plot_horizontal +
       annotate('text', y = mean(c(median(unlist(flexible_learning_costs)),median(unlist(robust_costs)))),
-               x = 5.9, label = "(ii)", vjust = 0)
+               x = 5.9, label = "**", vjust = 0)
   }
+  
+  cost_plot_horizontal <- cost_plot_horizontal +
+    theme(axis.text.y = element_text(), axis.ticks.y = element_line()) +
+    scale_x_continuous('', breaks= c(1,2,3,4), labels = c('(i)','(ii)','(iii)','(iv)'))
   
   fcn_avg_decisions <- function(decisions, area, summarize = T) {
     id <- decisions$NewPropID
@@ -549,6 +587,7 @@ for (i in 4:length(scen_list)) {
     filter(model %in% scen_list_i)
   prop_decisions_plot <- prop_decisions %>%
     filter(area > 20) %>%
+    mutate(model=paste0("(", tolower(as.roman(match(model, scen_list))), ') ', model)) %>%
     ggplot() +
     geom_sf(data = st_transform(nsw_lga_union, st_crs(prop_centroid))) +
     geom_point(aes(x = X, y = Y, color = model, alpha = decision)) +
@@ -636,8 +675,23 @@ for (i in 4:length(scen_list)) {
   CCC
   "
   
-  eulers <- as.ggplot(euler1) + as.ggplot(euler2) + as.ggplot(euler3) + cowplot::get_legend(end_range_plot) + plot_layout(nrow = 1)
-  plot1a <- wrap_elements(full=aus_plot) + wrap_elements(full=prop_decisions_plot) + wrap_elements(eulers) +
+  fcn_euler_add_legend <- function(vec) {
+    df <- data.frame(x = c(-Inf, Inf), y = c(-Inf, -Inf), hjust=c(0,1), vjust=c(0,0), label = vec)
+    list(geom_label(data = df, aes(x=x,y=y,hjust=hjust,vjust=vjust,label=str_wrap(label, width=14)), 
+                    label.padding=unit(.25, "lines"), size = 2),
+      coord_cartesian(clip='off'))
+  }
+  
+  eulers <- (as.ggplot(euler1)+fcn_euler_add_legend(scen_list[c(1,2)])) + 
+    plot_spacer() +
+    (as.ggplot(euler2)+fcn_euler_add_legend(scen_list[c(2,3)])) + 
+    plot_spacer() +
+    (as.ggplot(euler3)+fcn_euler_add_legend(scen_list[c(2,4)])) + 
+    cowplot::get_legend(end_range_plot) + plot_layout(nrow = 1) +
+    plot_layout(widths = c(1,0.1,1,0.1,1,1))
+  plot1a <- (wrap_elements(plot=aus_plot)+ggtitle('Study area')) + 
+    (wrap_elements(plot=prop_decisions_plot)+ggtitle("Covenant locations")) + 
+    (wrap_elements(plot=eulers)+ggtitle("Overlap in Stage 1 covenants")) +
     plot_layout(design = layout_1a, heights = c(1,0.5)) & plot_annotation(tag_levels = 'a')
   
   layout_1b <- "
@@ -653,8 +707,8 @@ for (i in 4:length(scen_list)) {
   CD
   "
   
-  plot1b2 <- year_split_inset + end_range_plot + cost_plot_horizontal + guide_area()+
-    plot_layout(design = layout_1b2, heights = c(1,1), widths = c(1,0.2), guides = 'collect') & plot_annotation(tag_levels = list(c('a','b','c','')))
+  plot1b2 <- (year_split_inset+ggtitle('Conservation outcomes')) + (end_range_plot+ggtitle('Conservation\noutcomes by 2070')) + (cost_plot_horizontal+ggtitle('Total cost')) + guide_area()+
+    plot_layout(design = layout_1b2, heights = c(1,1), widths = c(1,0.3), guides = 'collect') & plot_annotation(tag_levels = list(c('a','b','c','')))
   
   # Save plots to list
   plot_list[[i]] <- list(
@@ -675,7 +729,7 @@ for (i in 4:length(scen_list)) {
 # Save plots ------
 
 ggsave("plots/plot1.png", plot_list[[4]]$plot1, width = 2800, height = 2300, units = 'px')
-ggsave("plots/plot1a.png", plot_list[[4]]$plot1a, width = 2400, height = 1800, units = 'px')
+ggsave("plots/plot1a.png", plot_list[[4]]$plot1a, width = 2700, height = 2000, units = 'px')
 ggsave("plots/plot1b.png", plot_list[[4]]$plot1b, width = 2800, height = 1500, units = 'px')
 ggsave("plots/plot1b2.png", plot_list[[4]]$plot1b2, width = 3000, height = 1800, units = 'px')
 
@@ -901,6 +955,52 @@ dr_share_plot <- dr_share_diff %>%
 dr_share_plot
 dr_plots <- dr_share_plot / dr_flex_plot + theme(legend.position = 'bottom') & plot_annotation(tag_levels = 'a')
 
+dr_diff <- dr_flex_diff
+dr_diff$cst <- dr_share_diff$median
+
+dr_diff %>%
+  as.data.frame() %>%
+  mutate(learning = factor(learning, c('no', 'full'), scen_list[3:4])) %>%
+  mutate(median = as.numeric(median), lb = as.numeric(lb), ub = as.numeric(ub), cst = as.numeric(cst)) %>%
+  mutate(dr = as.numeric(name)) %>%
+  ggplot(aes(fill = learning, x = dr)) +
+  geom_bar(aes(y = cst), stat="identity", size=.1, color="black", alpha=.4) +
+  #geom_ribbon(aes(y = median, ymin = lb, ymax = ub), alpha = 0.4) +
+  #geom_point(aes(y = median, color = learning)) +
+  geom_line(aes(y = median, color = learning)) +
+  scale_color_manual("", values = scen_color_def) +
+  scale_fill_manual("", values = scen_color_def) +
+  geom_vline(xintercept = 0.0599, linetype = 'longdash', color = 'gray50') +
+  scale_y_continuous(
+    name = "Cost of covenants starting in Stage 1 (median)",
+    sec.axis = sec_axis(~ . * 100000)
+  ) + 
+  ggpubr::theme_pubr() +
+  guides(color = 'none', fill = 'none')+
+  theme(axis.title.x = element_blank(),
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank())
+
+dr_share_plot <- %>%
+  as.data.frame() %>%
+  mutate(learning = factor(learning, c('no', 'full'), scen_list[3:4])) %>%
+  mutate(median = as.numeric(median), lb = as.numeric(lb), ub = as.numeric(ub)) %>%
+  ggplot(aes( fill = learning, x = dr, y = median)) +
+  #geom_ribbon(aes(ymin = lb, ymax = ub), alpha = 0.4) +
+  geom_point(aes(color = learning)) +
+  geom_line(aes(color = learning)) +
+  scale_color_manual("", values = scen_color_def) +
+  scale_fill_manual("", values = scen_color_def) +
+  geom_vline(xintercept = 0.0599, linetype = 'longdash', color = 'gray50') +
+  scale_y_continuous("Cost from protection \nplaced in Stage 1 (median)", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), limits = c(0, 150e6)) +
+  ggpubr::theme_pubr() +
+  guides(color = 'none', fill = 'none')+
+  theme(axis.title.x = element_blank(),
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank())
+
 ggsave("plots/plot3.png", dr_plots, width = 1500, height = 1750, units = 'px')
 
 
@@ -946,7 +1046,7 @@ k_flex_diff <- list(
 
 tt_flex_plot <- plot_line_diff_learning(mutate(tt_flex_diff, name = 2000+as.numeric(name)*10), 0.2, "Year for new investment (t')")
 kt_flex_plot <- plot_line_diff_learning(kt_flex_diff, 0.01, "Ecological indicator cut-off")
-sdr_flex_plot <- plot_line_diff_learning(sdr_flex_diff, 0.001, "Discount rate (1-ρ)")
+sdr_flex_plot <- plot_line_diff_learning(sdr_flex_diff, 0.002, "Discount rate (r)")
 k_flex_plot <- plot_line_diff_learning(k_flex_diff, 500, "Policy target (hectares of koala habitat)")
 
 sensitivity_plots <- (k_flex_plot + sdr_flex_plot + tt_flex_plot + kt_flex_plot ) + plot_layout(guides='collect') & theme(legend.position = 'bottom') & plot_annotation(tag_levels = 'a')
