@@ -275,7 +275,7 @@ function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000,
     end
     
     # Objective is to minimise costs, z
-    @constraint(model, z >= sum((C₁ .+ C₂)' * x) + sum(p[s] * sum((add_recourse ? C₂[i] * y[i, s] : 0) + (terminate_recourse ? C₂[i] * w[i, s] : 0) for i in 1:N) for s in 1:S))
+    @constraint(model, z >= sum((C₁)' * x) + sum(p[s] * sum((add_recourse ? C₂[i, s] * y[i, s] : 0) + (terminate_recourse ? C₂[i, s] * w[i, s] : 0) for i in 1:N) for s in 1:S))
 
     optimize!(model)
     return (
@@ -304,7 +304,7 @@ function fcn_evaluate_solution(model::Model, realisations::Vector{Realisation})
 
     for j = 1:J
         r = realisations[j]
-        cost = [sum(r.C₁'*x + r.C₂'*(x + realisations[s].τ .* y[:, s] - w[:, s])) for s = 1:S]
+        cost = [sum(r.C₁'*x + r.C₂[:,s]'*(x + realisations[s].τ .* y[:, s] - w[:, s])) for s = 1:S]
         metric_1 = mapreduce(permutedims, vcat, [r.M₁[:, :, s]' * x for s = 1:S])'
         metric_2 = mapreduce(permutedims, vcat, [r.M₂[:, :, s]' * (x + realisations[s].τ .* y[:, s] - w[:, s]) for s = 1:S])'
         metric = vcat(metric_1, metric_2)

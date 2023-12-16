@@ -888,12 +888,12 @@ dr_flex_plot <- dr_flex_diff %>%
   geom_ribbon(aes(fill = learning, ymin = -lb, ymax = -ub), alpha = .4) +
   geom_point(aes(color = learning, y = -median)) +
   geom_line(aes(color = learning, y = -median)) +
-  scale_y_continuous("Cost reduction", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(0,1)) +
+  scale_y_continuous("Cost reduction\n(median & 90% intervals)", labels = scales::unit_format(scale = 100,unit = "%"), limits = c(0,1)) +
   scale_color_manual("", values = scen_color_def, labels = function(x) str_wrap(x, width = 24)) +
   scale_fill_manual("", values = scen_color_def, labels = function(x) str_wrap(x, width = 24)) +
   scale_x_continuous("Probability of land clearing") +
   ggpubr::theme_pubr() +
-  labs(caption = "Dashed line show NSW deforestation risk\nextrapolated from historical data") +
+  labs(caption = "Dashed line show land clearing probabilities extrapolated from historical data") +
   theme(legend.position = "bottom")
 
 ## Plot change in protected area size in stage 1 relative to stage 2
@@ -901,9 +901,10 @@ dr_share_full_learning <- lapply(dr_vec, function(i) {
   l <- full_learning
   l[8] <- i
   decision <- read_csv(paste0(results_dir, 'decision_ar_', get_run_string(l), '.csv'), col_types = cols())
+  decision_robust <- read_csv(paste0(results_dir, 'decision_nr_', get_run_string(l), '.csv'), col_types = cols())
   #baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
   cost_first_stage <- read_csv(paste0(results_dir, "cost_full_", get_run_string(l), ".csv"), col_types = cols()) 
-  x <- colSums(decision[,paste0('x', 1:rr)] * cost_first_stage)
+  x <- colSums(decision[,paste0('x', 1:rr)] * cost_first_stage) / colSums(decision_robust[,paste0('x', 1:rr)] * cost_first_stage)
   #y <- colSums(decision[,paste0('sum_y', 1:rr)]/12 * baseline_area)
   #x / (x+y)
 })
@@ -911,9 +912,10 @@ dr_share_no_learning <- lapply(dr_vec, function(i) {
   l <- no_learning
   l[8] <- i
   decision <- read_csv(paste0(results_dir, 'decision_ar_', get_run_string(l), '.csv'), col_types = cols())
+  decision_robust <- read_csv(paste0(results_dir, 'decision_nr_', get_run_string(l), '.csv'), col_types = cols())
   #baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
   cost_first_stage <- read_csv(paste0(results_dir, "cost_full_", get_run_string(l), ".csv"), col_types = cols()) 
-  x <- colSums(decision[,paste0('x', 1:rr)] * cost_first_stage)
+  x <- colSums(decision[,paste0('x', 1:rr)] * cost_first_stage) / colSums(decision_robust[,paste0('x', 1:rr)] * cost_first_stage)
   #y <- colSums(decision[,paste0('sum_y', 1:rr)]/12 * baseline_area)
   #x / (x+y)
 })
@@ -946,7 +948,8 @@ dr_share_plot <- dr_share_diff %>%
   scale_color_manual("", values = scen_color_def) +
   scale_fill_manual("", values = scen_color_def) +
   geom_vline(xintercept = 0.0599, linetype = 'longdash', color = 'gray50') +
-  scale_y_continuous("Cost from protection \nplaced in Stage 1 (median)", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), limits = c(0, 150e6)) +
+  #scale_y_continuous("Cost from protection \nplaced in Stage 1 (median)", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), limits = c(0, 150e6)) +
+  scale_y_continuous("Median percent of budget\nspent in the first time-period", labels = scales::percent, limits = c(0,1))+
   ggpubr::theme_pubr() +
   guides(color = 'none', fill = 'none')+
   theme(axis.title.x = element_blank(),
@@ -983,7 +986,7 @@ dr_diff %>%
         axis.ticks.x = element_blank(),
         axis.text.x = element_blank())
 
-dr_share_plot <- %>%
+dr_share_plot <- dr_diff%>%
   as.data.frame() %>%
   mutate(learning = factor(learning, c('no', 'full'), scen_list[3:4])) %>%
   mutate(median = as.numeric(median), lb = as.numeric(lb), ub = as.numeric(ub)) %>%
@@ -1002,7 +1005,7 @@ dr_share_plot <- %>%
         axis.ticks.x = element_blank(),
         axis.text.x = element_blank())
 
-ggsave("plots/plot3.png", dr_plots, width = 1500, height = 1750, units = 'px')
+ggsave("plots/plot3.png", dr_plots, width = 1500, height = 2000, units = 'px')
 
 
 dr_flex_diff %>%

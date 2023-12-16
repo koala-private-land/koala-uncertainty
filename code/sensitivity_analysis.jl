@@ -20,6 +20,8 @@ Random.seed!(54815861)
 
 include("optim-functions.jl")
 
+println("Loading data files...")
+
 cost_df = CSV.read("data/spatial_predictions_10yr.csv", DataFrame);
 kitl_index_full = CSV.read("data/kitl_prop_climate.csv", DataFrame);
 stratified_samples = CSV.read("data/stratified_sample.csv", DataFrame);
@@ -31,9 +33,11 @@ coefs_x = [Matrix(CSV.read("data/model_matrix/CoefsX.Inf_$i.csv", DataFrame, hea
 coefs_y = [Matrix(CSV.read("data/model_matrix/CoefsY.Inf_$i.csv", DataFrame, header=false)) for i in 1:10];
 coefs_z = [Matrix(CSV.read("data/model_matrix/CoefsZ.Inf_$i.csv", DataFrame, header=false)) for i in 1:10];
 
+println("Defining functions...")
+
 # Constants
-R = 30; # Total number of uncertainty realisations
-rr = 30; # Sampled realisations
+R = 1; # Total number of uncertainty realisations
+rr = 1; # Sampled realisations
 
 
 # Cost to time series
@@ -44,17 +48,17 @@ function cost_to_ts(cost::AbstractVector, area::AbstractVector, prop::AbstractVe
     # idx_afer: index of the costs after covenant modification
     # discount_rate: discounting of future costs
 
-    delta = (1 - discount_rate) .^ (cat(idx_before, idx_after, dims=1))
+    delta = (1 / (1+ discount_rate)) .^ (cat(idx_before, idx_after, dims=1))
     delta_before = sum(delta[idx_before])
     delta_after = sum(delta[idx_after])
     covenant_area = area .* prop;
     cost_ts = (cost .* 1000 .* covenant_area) # Cost per-year: cost per ha * area * proportion
 
     if (perpetuity)
-        cost_before = cost_ts .* delta_before # Cost start at 2020, and is a annuity payment until the end of idx_before
+        cost_before = cost_ts ./ discount_rate # Cost start at 2020, and is a annuity payment until the end of idx_before
         cost_after = (cost_ts .* delta[idx_after[1]]) ./ discount_rate # Perpetuity costs starting at idx_after
     else
-        cost_before = cost_ts .* delta_before # Cost start at 2020, and is a annuity payment until the end of idx_before
+        cost_before = cost_ts .* delta # Cost start at 2020, and is a annuity payment until the end of idx_before
         cost_after = cost_ts .* delta_after # Cost start at 2020, and is a annuity payment until the end of idx_before
     end
     return (cost_before, cost_after)
@@ -71,6 +75,19 @@ function subset_data(cost_full, kitl_index_full, subset_id::Vector{Int64})
     cost_subset = subset_propid(cost_subset, kitl_subset.NewPropID)
     kitl_subset = subset_propid(kitl_subset, cost_subset.NewPropID)
     return (cost_subset, kitl_subset)
+end
+
+function subset_realisation(realisation, subset_id::Vector{Int64})
+    C₁ = realisation.C₁[subset_id,:]
+    C₂ =  realisation.C₂[subset_id,:]
+    M₁ =  realisation.M₁[subset_id,:]
+    M₂ =  realisation.M₂[subset_id,:]
+    area =  realisation.area[subset_id]
+    deforestation_risk = realisation.deforestation_risk[subset_id]
+    τ =  realisation.τ[subset_id]
+    p = realisation.p[subset_id]
+    new_realisation = Realisation(C₁, C₂, M₁, M₂, area, deforestation_risk, τ, p)
+    return new_realisation
 end
 
 function get_propid(subset_id::Vector{Int64})
@@ -112,6 +129,7 @@ function fcn_realisation_sample_draws(cost_subset::DataFrame, kitl_subset::DataF
     sample_M₂ = M₂ .* prop_binary
     area = vec(cost_subset.AREA) .* prop_binary
     p = ones(size(sample_M₂, 3)) / size(sample_M₂, 3)
+    println("Generated a new realisation...")
     return Realisation(sample_C₁, sample_C₂, sample_M₁, sample_M₂, area, deforestation_risk, p)
 end
 
@@ -149,9 +167,18 @@ end
 function fcn_subset_realisation_sample_draw(kitl_index_full::DataFrame, subset_id::AbstractVector, tt::Integer=4, kt::AbstractFloat=0.25, discount_rate::Real=0.02, deforestation_risk=0.03)
     # First stage costs
     cost_df = fcn_get_predictions();
-    (cost_subset, kitl_subset) = subset_data(cost_df, kitl_index_full, subset_id)
-    realisation = fcn_realisation_sample_draws(cost_subset, kitl_subset, tt, kt, discount_rate, deforestation_risk)
-    return realisation;
+    realisation = fcn_realisation_sample_draws(cost_df, kitl_index_full, tt, kt, discount_rate, deforestation_risk)
+
+    # Second stage costs (uncertain)
+    realisations_second_stage = [fcn_realisation_sample_draws(fcn_get_predictions(), kitl_index_full, tt, kt, discount_rate, deforestation_risk) for s=1:S]
+    C₂ = [realisations_second_stage[s].C₂ for s=1:S]
+    M₂ = [realisations_second_stage[s].M₂[:,s] for s=1:S]
+    realisation.C₂ = permutedims(hcat(C₂...))
+    realisation.M₂ = permutedims(hcat(M₂...))
+
+    realisation_subset = subset_realisation(realisation, in(subset_id, cost_df.NewPropID))
+
+    return realisation_subset;
 end
 
 function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, discount_rate::Real=0.02, deforestation_risk::Real = 0.1, K::Real = 7000, baseline_conditions=false, recourses = (true,true,false,false))
