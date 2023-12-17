@@ -36,9 +36,9 @@ coefs_z = [Matrix(CSV.read("data/model_matrix/CoefsZ.Inf_$i.csv", DataFrame, hea
 println("Defining functions...")
 
 # Constants
-R = 1; # Total number of uncertainty realisations
-rr = 1; # Sampled realisations
-
+R = 100; # Total number of uncertainty realisations
+rr = 100; # Sampled realisations
+S = 12;
 
 # Cost to time series
 function cost_to_ts(cost::AbstractVector, area::AbstractVector, prop::AbstractVector, idx_before::AbstractVector=1:30, idx_after::AbstractVector=31:60, discount_rate::AbstractFloat= 0.02, perpetuity::Bool=true)
@@ -164,21 +164,24 @@ function fcn_get_predictions()
     return df
 end
 
-function fcn_subset_realisation_sample_draw(kitl_index_full::DataFrame, subset_id::AbstractVector, tt::Integer=4, kt::AbstractFloat=0.25, discount_rate::Real=0.02, deforestation_risk=0.03)
+function fcn_subset_realisation_sample_draw(kitl_index_full::DataFrame, subset_id::AbstractVector, tt::Integer=4, kt::AbstractFloat=0.25, discount_rate::Real=0.02, deforestation_risk=0.03, cost_uncertainty=false)
     # First stage costs
     cost_df = fcn_get_predictions();
-    realisation = fcn_realisation_sample_draws(cost_df, kitl_index_full, tt, kt, discount_rate, deforestation_risk)
+    (cost_subset, kitl_subset) = subset_data(cost_df, kitl_index_full, subset_id)
+    realisation = fcn_realisation_sample_draws(cost_subset, kitl_subset, tt, kt, discount_rate, deforestation_risk)
 
-    # Second stage costs (uncertain)
-    realisations_second_stage = [fcn_realisation_sample_draws(fcn_get_predictions(), kitl_index_full, tt, kt, discount_rate, deforestation_risk) for s=1:S]
-    C₂ = [realisations_second_stage[s].C₂ for s=1:S]
-    M₂ = [realisations_second_stage[s].M₂[:,s] for s=1:S]
-    realisation.C₂ = permutedims(hcat(C₂...))
-    realisation.M₂ = permutedims(hcat(M₂...))
+    if (cost_uncertainty)
+        # Second stage costs (uncertain)
+        pred_second_stage = [fcn_get_predictions() for s=1:S]
+        cost_second_stage = [subset_data(pred_second_stage[s], kitl_subset, subset_id)[1] for s=1:S];
+        realisations_second_stage = [fcn_realisation_sample_draws(cost_second_stage[s], kitl_subset, tt, kt, discount_rate, deforestation_risk) for s=1:S]
+        C₂ = [realisations_second_stage[s].C₂ for s=1:S]
+        M₂ = [realisations_second_stage[s].M₂[:,:,s] for s=1:S]
+        realisation.C₂ = hcat(C₂...)
+        realisation.M₂ = cat(M₂..., dims = 3)
+    end
 
-    realisation_subset = subset_realisation(realisation, in(subset_id, cost_df.NewPropID))
-
-    return realisation_subset;
+    return realisation;
 end
 
 function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, discount_rate::Real=0.02, deforestation_risk::Real = 0.1, K::Real = 7000, baseline_conditions=false, recourses = (true,true,false,false))
@@ -204,7 +207,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     CSV.write("$(out_dir)/cost1_$(run_string).csv", realisation_cost_1_df)
 
     # Write full costs of conservation covenant to table
-    realisation_cost_full = hcat([realisations[r].C₁ + realisations[r].C₂ for r in 1:R]...)
+    realisation_cost_full = hcat([realisations[r].C₁ + mean(realisations[r].C₂, dims = 2) for r in 1:R]...)
     realisation_cost_full_df = DataFrame(realisation_cost_full, :auto)
     CSV.write("$(out_dir)/cost_full_$(run_string).csv", realisation_cost_full_df)
     
@@ -298,9 +301,6 @@ k_vec = [2500, 4000, 5500, 7000, 8500, 10000, 11500]
 dir = "results/mc_sim_mcmc"
 
 println("Starting sensitivity analysis...")
-
-# Get cost realisations into matrices
-fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, true, true)
 
 # Ignore uncertainty
 fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, true)
