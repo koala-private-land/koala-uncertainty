@@ -396,8 +396,8 @@ for (i in 4:length(scen_list)) {
     guides(color = 'none', fill = 'none') +
     scale_y_continuous("Covenant area (ha)") +
     ggpubr::theme_pubr() +
-    annotate('text', x = 1, y = 18000, color = 'black', label = 'Stage 1', vjust=1) +
-    annotate('text', x = 2 , y = 18000, color = 'black', label = 'Stage 2', vjust=1) +
+    annotate('text', x = 1, y = 18000, color = 'black', label = 'Time-period 1', vjust=1) +
+    annotate('text', x = 2 , y = 18000, color = 'black', label = 'Time-period 2', vjust=1) +
     coord_cartesian(xlim = c(0.5,2.5), ylim = c(6000,18000)) +
     theme(axis.title.x = element_blank(),
           axis.line.x = element_blank(),
@@ -438,8 +438,8 @@ for (i in 4:length(scen_list)) {
     geom_line(aes(y = median, color = model, alpha = "Median"), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
     geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
-    annotate("text", label = "Stage\n1", x = mean(c(2020,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
-    annotate("text", label = "Stage\n2", x = mean(c(2070,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50') +
+    annotate("text", label = "Time-\nperiod\n1", x = mean(c(2020,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50', size = 3) +
+    annotate("text", label = "Time-\nperiod\n2", x = mean(c(2070,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50', size = 3) +
     #annotate("segment", x = 2020, xend = year_vec[tt]-1, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
     #annotate("segment", x = 2070, xend = year_vec[tt]-1, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
     scale_y_continuous("Policy target", labels = function(x) paste0(x*100 / 7000, '%'), breaks = ((0:8)*50) * 70) +
