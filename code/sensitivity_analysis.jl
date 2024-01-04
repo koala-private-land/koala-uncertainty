@@ -36,8 +36,8 @@ coefs_z = [Matrix(CSV.read("data/model_matrix/CoefsZ.Inf_$i.csv", DataFrame, hea
 println("Defining functions...")
 
 # Constants
-R = 100; # Total number of uncertainty realisations
-rr = 100; # Sampled realisations
+R = 30; # Total number of uncertainty realisations
+rr = 30; # Sampled realisations
 S = 12;
 
 # Cost to time series

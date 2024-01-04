@@ -18,7 +18,7 @@ sp = 1 #1:10
 tt = 6 # [0,1,2,3,4,5,6,7]
 kt = 0.25 # [0.1, 0.15, 0.2, 0.25, 0.3]
 ns = 12 # 1:12
-rr = 1
+rr = 30
 sdr = 0.02
 dr = 0.1
 k = 7000
@@ -105,7 +105,7 @@ aus_plot <- ggplot() +
 
 spatial_pred <- read_csv('data/spatial_predictions_10yr.csv')
 
-scen_list <- c('Inflexible - Ignore Risk', 'Inflexible - Robust', 'Flexible - Climate Change', 'Flexible & Learning - Climate Change')
+scen_list <- c('Inflexible - Ignore Risk', 'Inflexible - Robust', 'Flexible', 'Flexible & Learning')
 plot_list <- list()
 
 fcn_decision_set <- function(a,b,area) {
@@ -348,8 +348,8 @@ for (i in 4:length(scen_list)) {
     coord_cartesian(xlim = c(2020,2070), ylim = c(3000, 15000)) +
     guides(color = 'none', fill = 'none')+
     ggpubr::theme_pubr() +
-    annotate('text', x = mean(c(year_vec[3], year_vec[tt]-1)), y = 15000, color = 'black', label = 'Stage 1', vjust=1) +
-    annotate('text', x = mean(c(year_vec[tt]-1, year_vec[length(year_vec)])) , y = 15000, color = 'black', label = 'Stage 2', vjust=1) +
+    annotate('text', x = mean(c(year_vec[3], year_vec[tt]-1)), y = 15000, color = 'black', label = 'Time-period 1', vjust=1) +
+    annotate('text', x = mean(c(year_vec[tt]-1, year_vec[length(year_vec)])) , y = 15000, color = 'black', label = 'Time-period 2', vjust=1) +
     theme(axis.title.x = element_blank(),
           axis.line.x = element_blank(),
           axis.ticks.x = element_blank(),
@@ -583,7 +583,7 @@ for (i in 4:length(scen_list)) {
     mutate(probability = decision) %>%
     mutate(model = factor(model, c('baseline', 'robust', 'flexible', 'flexible_learning'), scen_list)) %>%
     filter(decision > 0) %>%
-    mutate(stage = factor(stage, c('x','y'), c('Stage 1', 'Stage 2'))) %>%
+    mutate(stage = factor(stage, c('x','y'), c('Time-period 1', 'Time-period 2'))) %>%
     filter(model %in% scen_list_i)
   prop_decisions_plot <- prop_decisions %>%
     filter(area > 20) %>%
@@ -693,7 +693,7 @@ for (i in 4:length(scen_list)) {
   plot1a <- (wrap_elements(plot=aus_plot)+ggtitle('Study area')) + 
     (wrap_elements(plot=prop_decisions_plot)+ggtitle("Covenant locations")) + 
     (wrap_elements(plot=eulers)+ggtitle("Overlap in Stage 1 covenants")) +
-    plot_layout(design = layout_1a, heights = c(1,0.3)) & plot_annotation(tag_levels = 'a')
+    plot_layout(design = layout_1a, heights = c(1,0.5)) & plot_annotation(tag_levels = 'a')
   
   layout_1b <- "
   AB#
@@ -948,7 +948,7 @@ dr_share_plot <- dr_share_diff %>%
   scale_color_manual("", values = scen_color_def) +
   scale_fill_manual("", values = scen_color_def) +
   geom_vline(xintercept = 0.0599, linetype = 'longdash', color = 'gray50') +
-  #scale_y_continuous("Cost from protection \nplaced in Stage 1 (median)", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), limits = c(0, 150e6)) +
+  #scale_y_continuous("Cost from protection \nplaced in time-period 1 (median)", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), limits = c(0, 150e6)) +
   scale_y_continuous("Median percent of budget\nspent in the first time-period", labels = scales::percent, limits = c(0,1))+
   ggpubr::theme_pubr() +
   guides(color = 'none', fill = 'none')+
