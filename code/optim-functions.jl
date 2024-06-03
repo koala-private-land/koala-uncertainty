@@ -229,7 +229,7 @@ function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, �
     )
 end
 
-function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000, add_recourse=true, terminate_recourse=true, ns::Integer=1, baseline_conditions=false)
+function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000, add_recourse=true, terminate_recourse=true, ns::Integer=1, baseline_conditions::Bool=false, budget_constraint=(missing, missing), min_spend=(missing,missing), K_pa_change::Float = 0.0)
     # Solve the deterministic equivalent of the two-stage problem with sample average approximation
     # In contrast to the SAA approach, this approach assumes that the decision maker knows the bids of landholders for certain
 
@@ -239,6 +239,10 @@ function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000,
     # add_recourse: whether to allow recourse to adding units in the second stage
     # terminate_recourse: whether to allow recourse to terminating units in the second stage
     # ns: number of scenarios in each resolution of uncertainty
+    # baseline_conditions: whether or not planning is done assuming baseline conditions
+    # budget_constraint: budget constraint (maximum) to the first-stage and second-stage spending, with None being unconstrained
+    # min_spend: minimum amount of spending in the first-stage and second-stage
+    # K_pa_change: per-annum change in the target
 
     N, S = get_properties(realisation) # N: number of units, S: number of climate scenarios
     s_vec = fcn_resolve_scenario_incomplete(ns)
@@ -263,21 +267,43 @@ function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000,
         @constraint(model, [i in 1:N, s in 1:S], x[i] - w[i, s] >= 0)
     end
     
-    if (baseline_conditions)
+    if (baseline_conditions) # Assume conditions persist according to the baseline
         # Conservation goals only need to met on average across all timesteps
         for t in axes(M₂, 2)
             @constraint(model, sum(p[s] * M₂[:, t, s]' * x for s in 1:S) .>= K)
         end
     else
         # Objective must be reached across all climate realisations before climate is known
-        @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K)
+        @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K * (1+K_pa_change)^((t-1)*10-1))
         
         # After uncertainty is revealed, the objective only needs to be met at that scenario
-        @constraint(model, [t in axes(M₂, 2), s in 1:S], M₂[:, t, s_vec[s]]' * (x .+ (add_recourse ? y[:, s] : 0) .- (terminate_recourse ? w[:, s] : 0)) .>= K)
+        @constraint(model, [t in axes(M₂, 2), s in 1:S], M₂[:, t, s_vec[s]]' * (x .+ (add_recourse ? y[:, s] : 0) .- (terminate_recourse ? w[:, s] : 0)) .>= K *(1+K_pa_change)^((t+ axes(M₁, 2) - 1)*10-1))
     end
     
     # Objective is to minimise costs, z
     @constraint(model, z >= sum((C₁)' * x) + sum(p[s] * sum((add_recourse ? C₂[i] * y[i, s] : 0) + (terminate_recourse ? C₂[i] * w[i, s] : 0) for i in 1:N) for s in 1:S))
+
+    # Constrain maximum spending in Stage 1 and 2
+    if (~ismissing(budget_constraint[1]))
+        @constraint(model, sum((C₁)' * x) <= budget_constraint[1])
+    end
+
+    if (~ismissing(budget_constraint[1]))
+        for s in 1:S
+            @constraint(model, sum((add_recourse ? C₂[i] * y[i, s] : 0) + (terminate_recourse ? C₂[i] * w[i, s] : 0) for i in 1:N) <= budget_constraint[2])
+        end
+    end
+
+    # Constrain minimum spending in Stage 1 and 2
+    if (~ismissing(min_spend[1]))
+        @constraint(model, sum((C₁)' * x) >= min_spend[1])
+    end
+
+    if (~ismissing(min_spend[2]))
+        for s in 1:S
+            @constraint(model, sum((add_recourse ? C₂[i] * y[i, s] : 0) + (terminate_recourse ? C₂[i] * w[i, s] : 0) for i in 1:N) <= min_spend[2])
+        end
+    end
 
     optimize!(model)
     return (

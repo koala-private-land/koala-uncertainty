@@ -19,6 +19,7 @@ using Random
 Random.seed!(54815861)
 
 include("optim-functions.jl")
+include("discounting.jl")
 
 println("Loading data files...")
 
@@ -54,7 +55,11 @@ function cost_to_ts(cost::AbstractVector, area::AbstractVector, prop::AbstractVe
     covenant_area = area .* prop;
     cost_ts = (cost .* 1000 .* covenant_area) # Cost per-year: cost per ha * area * proportion
 
-    if (perpetuity)
+    if (ismissing(discount_rate))
+        # Use declining social discount rate per Green Book guidance
+        cost_before = cost_ts .* declining_discount_annuity(1)
+        cost_after = cost_ts .* declining_discount_annuity(30)
+    else if (perpetuity)
         cost_before = cost_ts ./ discount_rate # Cost start at 2020, and is a annuity payment until the end of idx_before
         cost_after = (cost_ts .* delta[idx_after[1]]) ./ discount_rate # Perpetuity costs starting at idx_after
     else
@@ -184,9 +189,9 @@ function fcn_subset_realisation_sample_draw(kitl_index_full::DataFrame, subset_i
     return realisation;
 end
 
-function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, discount_rate::Real=0.02, deforestation_risk::Real = 0.1, K::Real = 7000, baseline_conditions=false, recourses = (true,true,false,false))
+function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, kt::AbstractFloat, ns::Integer, discount_rate::Real=0.02, deforestation_risk::Real = 0.1, K::Real = 7000, baseline_conditions=false, second_stage_budget::Float = 0.0, K_pa_change::Float=0.0, recourses = (true,true,false,false))
     Random.seed!(54815861) # Ensure all realisation samples are the same
-    run_string = "run_k-$(K)_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)_r-$(rr)_sdr-$(discount_rate)_dr-$(deforestation_risk)"
+    run_string = "run_k-$(K)_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)_r-$(rr)_sdr-$(ismissing(discount_rate) ? 'ddr' : discount_rate)_dr-$(deforestation_risk)_ssb-$(second_stage_budget)_kpac-$(K_pa_change)"
     #if (baseline_conditions && isfile("$(out_dir)/decision_baseline_$(run_string).csv"))
     #    println("Run $(run_string) skipped because output is present")
     #    return
@@ -233,7 +238,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     end
 
     if (no_recourse) 
-        solution_nr_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=K, ns=ns, terminate_recourse=false, add_recourse=false) for r in 1:R]
+        solution_nr_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=K, ns=ns, terminate_recourse=true, add_recourse=true, budget_constraint = (missing, second_stage_budget), K_pa_change=K_pa_change) for r in 1:R]
         models_nr_vec = [soln.model for soln in solution_nr_vec]
         (cost_nr, metric_nr) = fcn_evaluate_solution(models_nr_vec, realisations)
         decision_nr = fcn_tidy_two_stage_solution_sum(models_nr_vec, out_propid)
@@ -243,7 +248,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     end
 
     if (add_recourse) 
-        solution_ar_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=K, ns=ns, terminate_recourse=false, add_recourse=true) for r in 1:R]
+        solution_ar_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=K, ns=ns, terminate_recourse=false, add_recourse=true, K_pa_change=K_pa_change) for r in 1:R]
         models_ar_vec = [soln.model for soln in solution_ar_vec]
         (cost_ar, metric_ar) = fcn_evaluate_solution(models_ar_vec, realisations)
         decision_ar = fcn_tidy_two_stage_solution_sum(models_ar_vec, out_propid)
@@ -257,7 +262,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     end
 
     if (terminate_recourse) 
-        solution_tr_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=K, ns=ns, terminate_recourse=true, add_recourse=false) for r in 1:R]
+        solution_tr_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=K, ns=ns, terminate_recourse=true, add_recourse=false, K_pa_change=K_pa_change) for r in 1:R]
         models_tr_vec = [soln.model for soln in solution_tr_vec]
         (cost_tr, metric_tr) = fcn_evaluate_solution(models_tr_vec, realisations)
         decision_tr = fcn_tidy_two_stage_solution_sum(models_tr_vec, out_propid)
@@ -267,7 +272,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     end
 
     if (full_recourse) 
-        solution_fr_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=K, ns=ns, terminate_recourse=true, add_recourse=true) for r in 1:R]
+        solution_fr_vec = [fcn_two_stage_opt_deforestation(realisations[r]; K=K, ns=ns, terminate_recourse=true, add_recourse=true, K_pa_change=K_pa_change) for r in 1:R]
         models_fr_vec = [soln.model for soln in solution_fr_vec]
         (cost_fr, metric_fr) = fcn_evaluate_solution(solution_fr.model, realisations)
         decision_fr = fcn_tidy_two_stage_solution_sum(solution_fr, out_propid)
