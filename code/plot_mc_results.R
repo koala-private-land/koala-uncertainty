@@ -10,18 +10,19 @@ library(ggthemes)
 library(ggplotify)
 library(eulerr)
 
-results_dir <- "results/mc_sim_mcmc/"
-#results_dir <- "~/Documents/OneDrive - The University of Queensland/Documents/GitHub/koala-uncertainty/results/mc_sim/"
+results_dir <- "results/model_runs/"
 
 # Default parameters
-sp = 1 #1:10
-tt = 6 # [0,1,2,3,4,5,6,7]
-kt = 0.25 # [0.1, 0.15, 0.2, 0.25, 0.3]
-ns = 12 # 1:12
-rr = 30
-sdr = 0.02
-dr = 0.1
-k = 7000
+sp <- 1 #1:10
+tt <- 6 # [0,1,2,3,4,5,6,7]
+kt <- 0.25 # [0.1, 0.15, 0.2, 0.25, 0.3]
+ns <- 12 # 1:12
+rr <- 1
+sdr <- 0.02
+dr <- 0.1
+k <- 7000
+kpac <- 0
+ssb <- 1.0e7
 
 colorpal <- c("#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#D55E00", "#F0E442" ,"#0072B2")
 
@@ -35,31 +36,44 @@ scale_color_colorblind7 = function(...){
   scale_color_discrete(..., type = colorpal)
 }
 
-default_params = c(k, sp, tt, kt, ns, rr, sdr, dr)
-base_string <- "run_k-%s_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s"
+default_params = c(k, sp, tt, kt, ns, rr, sdr, dr, ssb, kpac)
+base_string <- "run_k-%s_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s_ssb-%.1e_kpac-%.1f"
 
-flexibility_differences <- function(recourse = c(T,T,F,F), loop_vec = 1:10, params = default_params, 
+get_run_string <- function(params = default_params) {
+  run_string <-  do.call(sprintf, c(fmt = base_string, as.list(params))) %>%
+      gsub('\\+', '', .) %>%
+      gsub('e07', 'e7',.)
+  return(run_string)
+}
+
+flexibility_differences <- function(recourse = c(T,T,T,F,F), loop_vec = 1:10, params = default_params, 
                                     dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
   # dep_var starts at 0
   cost_diff_pct <- lapply(loop_vec, function(x) {
     vec_var <- params
     vec_var[dep_var] <- x
-    run_string <- do.call(sprintf, c(fmt = base_string, as.list(vec_var)))
+    run_string <-  do.call(sprintf, c(fmt = base_string, as.list(vec_var))) %>%
+      gsub('\\+', '', .) %>%
+      gsub('e07', 'e7',.)
     diff <- list()
     if (recourse[1]) {
       nr <- read_csv(paste0(results_dir, "cost_nr_", run_string, ".csv"), col_types = cols())
     }
     if (recourse[2]){
-      ar <- read_csv(paste0(results_dir, "cost_ar_", run_string, ".csv"), col_types = cols()) # recourse solution
-      diff$ar = (ar - nr) / nr
+      pr <- read_csv(paste0(results_dir, "cost_pr_", run_string, ".csv"), col_types = cols()) # recourse solution
+      diff$ar = (ar - pr) / pr
     }
     if (recourse[3]){
+      ar <- read_csv(paste0(results_dir, "cost_ar_", run_string, ".csv"), col_types = cols()) # recourse solution
+      diff$ar = (ar - pr) / pr
+    }
+    if (recourse[4]){
       tr <- read_csv(paste0(results_dir, "cost_tr_", run_string, ".csv"), col_types = cols()) # recourse solution
-      diff$tr = (tr - nr)/ nr
+      diff$tr = (tr - pr)/ pr
       }
-    if (recourse[4]) {
+    if (recourse[5]) {
       fr <- read_csv(paste0(results_dir, "cost_fr_", run_string, ".csv"), col_types = cols()) # recourse solution
-      diff$fr = (fr - nr)/nr
+      diff$fr = (fr - pr)/pr
     }
     diff
   })
@@ -123,18 +137,16 @@ fcn_decision_set <- function(a,b,area) {
 
 scen_color_def <- as.vector(colorpal[1:length(scen_list)])
 names(scen_color_def) <- scen_list
-
-for (i in 4:length(scen_list)) {
+i = 4
   scen_list_i <- scen_list[1:i]
 
-  get_run_string <- function(param=default) do.call(sprintf, c(fmt = base_string, as.list(param)))
-  baseline_string <- get_run_string(c(k, sp, tt, kt, ns, rr, sdr, dr))
-  robust_string   <- get_run_string(c(k, sp, tt, kt, ns, rr, sdr, dr))
-  flexible_string <- get_run_string(c(k, sp, tt, kt, ns, rr, sdr, dr))
-  flexible_learning_string <- get_run_string(c(k, sp, tt, kt, 1, rr, sdr, dr))
+  baseline_string <- get_run_string(c(k, sp, tt, kt, ns, rr, sdr, dr, ssb, kpac))
+  robust_string   <- get_run_string(c(k, sp, tt, kt, ns, rr, sdr, dr, ssb, kpac))
+  flexible_string <- get_run_string(c(k, sp, tt, kt, ns, rr, sdr, dr, ssb, kpac))
+  flexible_learning_string <- get_run_string(c(k, sp, tt, kt, 1, rr, sdr, dr, ssb, kpac))
   
   baseline_metric <- read_csv(paste0(results_dir, "metric_baseline_", baseline_string, ".csv"), col_types = cols())
-  robust_metric <- read_csv(paste0(results_dir, "metric_nr_", robust_string, ".csv"), col_types = cols())
+  robust_metric <- read_csv(paste0(results_dir, "metric_pr_", robust_string, ".csv"), col_types = cols())
   flexible_metric <- read_csv(paste0(results_dir, 'metric_ar_', flexible_string, ".csv"), col_types = cols())
   flexible_learning_metric <- read_csv(paste0(results_dir, 'metric_ar_', flexible_learning_string, ".csv"), col_types = cols())
   
@@ -247,7 +259,7 @@ for (i in 4:length(scen_list)) {
   
   baseline_decisions <- read_csv(paste0(results_dir, "decision_baseline_", baseline_string, ".csv"), col_types = cols()) %>% 
     decision_vector_calc()
-  robust_decisions <- read_csv(paste0(results_dir, "decision_nr_", robust_string, ".csv"), col_types = cols()) %>% 
+  robust_decisions <- read_csv(paste0(results_dir, "decision_pr_", robust_string, ".csv"), col_types = cols()) %>% 
     decision_vector_calc()
   flexible_decisions <- read_csv(paste0(results_dir, 'decision_ar_', flexible_string, ".csv"), col_types = cols()) %>% 
     decision_vector_calc()
@@ -256,7 +268,7 @@ for (i in 4:length(scen_list)) {
   
   ## Total conservation costs
   baseline_costs <- read_csv(paste0(results_dir, "cost_baseline_", baseline_string, ".csv"), col_types = cols())
-  robust_costs <- read_csv(paste0(results_dir, "cost_nr_", baseline_string, ".csv"), col_types = cols())
+  robust_costs <- read_csv(paste0(results_dir, "cost_pr_", baseline_string, ".csv"), col_types = cols())
   flexible_costs <- read_csv(paste0(results_dir, 'cost_ar_', flexible_string, ".csv"), col_types = cols())
   flexible_learning_costs <- read_csv(paste0(results_dir, 'cost_ar_', flexible_learning_string, ".csv"), col_types = cols())
   
@@ -725,7 +737,6 @@ for (i in 4:length(scen_list)) {
     plot1b = plot1b,
     plot1b2 = plot1b2
   )
-}
 
 # Save plots ------
 
@@ -901,7 +912,7 @@ dr_share_full_learning <- lapply(dr_vec, function(i) {
   l <- full_learning
   l[8] <- i
   decision <- read_csv(paste0(results_dir, 'decision_ar_', get_run_string(l), '.csv'), col_types = cols())
-  decision_robust <- read_csv(paste0(results_dir, 'decision_nr_', get_run_string(l), '.csv'), col_types = cols())
+  decision_robust <- read_csv(paste0(results_dir, 'decision_pr_', get_run_string(l), '.csv'), col_types = cols())
   #baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
   cost_first_stage <- read_csv(paste0(results_dir, "cost_full_", get_run_string(l), ".csv"), col_types = cols()) 
   x <- colSums(decision[,paste0('x', 1:rr)] * cost_first_stage) / colSums(decision_robust[,paste0('x', 1:rr)] * cost_first_stage)
@@ -912,7 +923,7 @@ dr_share_no_learning <- lapply(dr_vec, function(i) {
   l <- no_learning
   l[8] <- i
   decision <- read_csv(paste0(results_dir, 'decision_ar_', get_run_string(l), '.csv'), col_types = cols())
-  decision_robust <- read_csv(paste0(results_dir, 'decision_nr_', get_run_string(l), '.csv'), col_types = cols())
+  decision_robust <- read_csv(paste0(results_dir, 'decision_pr_', get_run_string(l), '.csv'), col_types = cols())
   #baseline_area <- read_csv(paste0(results_dir, "area_", get_run_string(l), ".csv"), col_types = cols()) 
   cost_first_stage <- read_csv(paste0(results_dir, "cost_full_", get_run_string(l), ".csv"), col_types = cols()) 
   x <- colSums(decision[,paste0('x', 1:rr)] * cost_first_stage) / colSums(decision_robust[,paste0('x', 1:rr)] * cost_first_stage)

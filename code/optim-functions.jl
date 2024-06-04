@@ -1,7 +1,9 @@
 # Solve a two-stage stochastic optimisation problem with JuMP where uncertainty is fully revealed in time τ
 # Objective: minimise cost subject to a metric reaching a threshold across all time periods
 
-using JuMP, Gurobi, Random
+using JuMP, Gurobi, Random, Distributed
+
+GRB_ENV = Gurobi.Env()
 
 Base.@kwdef mutable struct Realisation
     # C₁: first stage costs, each element of the vector is for each property unit (size: N, N: number of units)
@@ -229,7 +231,7 @@ function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, �
     )
 end
 
-function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000, add_recourse=true, terminate_recourse=true, ns::Integer=1, baseline_conditions::Bool=false, budget_constraint=(missing, missing), min_spend=(missing,missing), K_pa_change::Float = 0.0)
+function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000, add_recourse=true, terminate_recourse=true, ns::Integer=1, baseline_conditions::Bool=false, budget_constraint=(missing, missing), min_spend=(missing,missing), K_pa_change::Float64 = 0.0)
     # Solve the deterministic equivalent of the two-stage problem with sample average approximation
     # In contrast to the SAA approach, this approach assumes that the decision maker knows the bids of landholders for certain
 
@@ -243,12 +245,13 @@ function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000,
     # budget_constraint: budget constraint (maximum) to the first-stage and second-stage spending, with None being unconstrained
     # min_spend: minimum amount of spending in the first-stage and second-stage
     # K_pa_change: per-annum change in the target
-
+    println("Starting optimisation iteration...")
     N, S = get_properties(realisation) # N: number of units, S: number of climate scenarios
     s_vec = fcn_resolve_scenario_incomplete(ns)
 
-    model = Model(Gurobi.Optimizer)
+    model = Model(() -> Gurobi.Optimizer(GRB_ENV))
     set_silent(model)
+    set_attribute(model, "OutputFlag", 0)
     @variable(model, 0 <= x[1:N] <= 1) # First stage decision
     @variable(model, z) # Worst-case costs across all cost realisations
     @objective(model, Min, z)
@@ -277,7 +280,7 @@ function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000,
         @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K * (1+K_pa_change)^((t-1)*10-1))
         
         # After uncertainty is revealed, the objective only needs to be met at that scenario
-        @constraint(model, [t in axes(M₂, 2), s in 1:S], M₂[:, t, s_vec[s]]' * (x .+ (add_recourse ? y[:, s] : 0) .- (terminate_recourse ? w[:, s] : 0)) .>= K *(1+K_pa_change)^((t+ axes(M₁, 2) - 1)*10-1))
+        @constraint(model, [t in axes(M₂, 2), s in 1:S], M₂[:, t, s_vec[s]]' * (x .+ (add_recourse ? y[:, s] : 0) .- (terminate_recourse ? w[:, s] : 0)) .>= K * (1+K_pa_change)^((t+ size(M₁, 2) - 1)*10-1))
     end
     
     # Objective is to minimise costs, z
@@ -288,7 +291,7 @@ function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000,
         @constraint(model, sum((C₁)' * x) <= budget_constraint[1])
     end
 
-    if (~ismissing(budget_constraint[1]))
+    if (~ismissing(budget_constraint[2]))
         for s in 1:S
             @constraint(model, sum((add_recourse ? C₂[i] * y[i, s] : 0) + (terminate_recourse ? C₂[i] * w[i, s] : 0) for i in 1:N) <= budget_constraint[2])
         end

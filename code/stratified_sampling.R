@@ -27,14 +27,3 @@ rand_strat_sample <- function(cost_pred) {
 newpropid_rand <- replicate(100, rand_strat_sample(cost_pred)) %>%
   as.data.frame()
 write_csv(newpropid_rand,"data/stratified_sample.csv")
-
-nrow(strata)
-sum(strata$AREA)
-
-# 10-year costs (expressed in real units)
-inflation_rate <- 0.02
-inflation_vector <- (1+inflation_rate)^(seq(2025, 2085, 10) - 2020)
-cost <- t(t(matrix(rep(properties_subset$MeanWTA * 1000 * (properties_subset$MeanProp * properties_subset$area_hectares), 7), ncol = 7)) * discount_vector) %>%
-  as.data.frame()
-colnames(cost) <- paste0("cost", as.character(seq(2025, 2085, 10)))
-cost_df <- cbind(data.frame(NewPropID = properties_subset$NewPropID), cost)

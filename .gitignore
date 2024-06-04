@@ -9,3 +9,4 @@ results/
 plots/shapes.rds
 plots/plot_list_ns.rds
 .gitignore
+plots/shapes.RData
