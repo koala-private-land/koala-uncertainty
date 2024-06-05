@@ -11,7 +11,6 @@ using Revise
 using StatsBase
 using Gurobi
 using JuMP
-using StatsPlots
 using Distributions
 using JLD2
 using Random

@@ -31,13 +31,11 @@ Base.@kwdef mutable struct Realisation
 end
 
 mutable struct Solution
-    feasible::Bool
     model::Model
+    obj_value::Real
     x::AbstractArray
     y::AbstractArray
     w::AbstractArray
-    cost::AbstractArray
-    metric::AbstractArray
 end
 
 
@@ -231,7 +229,7 @@ function fcn_two_stage_opt_saa(realisations=Vector{Realisation}; K::Real=7000, �
     )
 end
 
-function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000, add_recourse=true, terminate_recourse=true, ns::Integer=1, baseline_conditions::Bool=false, budget_constraint=(missing, missing), min_spend=(missing,missing), K_pa_change::Float64 = 0.0)
+function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000, add_recourse=true, terminate_recourse=true, ns::Integer=1, baseline_conditions::Bool=false, budget_constraint=(missing, missing), min_spend=(missing,missing), K_pa_change::Float64 = 0.0)::Solution
     # Solve the deterministic equivalent of the two-stage problem with sample average approximation
     # In contrast to the SAA approach, this approach assumes that the decision maker knows the bids of landholders for certain
 
@@ -309,48 +307,21 @@ function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000,
     end
 
     optimize!(model)
-    return (
-        model=model,
-        obj_value=objective_value(model),
-        x=value.(x),
-        y=(add_recourse ? value.(y) : zeros(N, S)),
-        w=(terminate_recourse ? value.(w) : zeros(N, S))
+    out = Solution(
+        model,
+        objective_value(model),
+        value.(x),
+        (add_recourse ? value.(y) : zeros(N, S)),
+        (terminate_recourse ? value.(w) : zeros(N, S))
     )
+    return out
 end
 
-function fcn_evaluate_solution(model::Model, realisations::Vector{Realisation})
-    # model: Solved JuMP model
-    # realisations: a vector of realisations
-
-    J = length(realisations)
-    N, S = get_properties(realisations[1])
-    T = size(realisations[1].M₁, 2) + size(realisations[1].M₂, 2)
-
-    x = value.(model[:x])
-    y = haskey(model, :y) ? value.(model[:y]) : zeros(N, S)
-    w = haskey(model, :w) ? value.(model[:w]) : zeros(N, S)
-
-    cost_mat = zeros(S, J)
-    metric_mat = zeros(S, T, J)
-
-    for j = 1:J
-        r = realisations[j]
-        cost = [sum(r.C₁'*x + r.C₂'*(x + realisations[s].τ .* y[:, s] - w[:, s])) for s = 1:S]
-        metric_1 = mapreduce(permutedims, vcat, [r.M₁[:, :, s]' * x for s = 1:S])'
-        metric_2 = mapreduce(permutedims, vcat, [r.M₂[:, :, s]' * (x + realisations[s].τ .* y[:, s] - w[:, s]) for s = 1:S])'
-        metric = vcat(metric_1, metric_2)
-        cost_mat[:, j] = cost
-        metric_mat[:, :, j] = metric'
-    end
-
-    return (cost_mat, metric_mat)
-end
-
-function fcn_evaluate_solution(model::Vector{Model}, realisations::Vector{Realisation})
-    # model: a vector of solved JuMP models
+function fcn_evaluate_solution(solutions::Vector{Solution}, realisations::Vector{Realisation})
+    # solutions: a vector of solved optimisation solutions
     # realisations: a vector of realisations, each realisation corresponds to each model by index
 
-    if (length(model) != length(realisations))
+    if (length(solutions) != length(realisations))
         error("The number of models and realisations must be equal")
     end
 
@@ -362,10 +333,10 @@ function fcn_evaluate_solution(model::Vector{Model}, realisations::Vector{Realis
     cost_mat = zeros(S, J)
     metric_mat = zeros(S, T, J)
 
-    function fcn_evaluate_solution_model(model::Model, r::Realisation)
-        x = value.(model[:x])
-        y = haskey(model, :y) ? value.(model[:y]) : zeros(N, S)
-        w = haskey(model, :w) ? value.(model[:w]) : zeros(N, S)
+    function fcn_evaluate_solution_model(solution::Solution, r::Realisation)
+        x = solution.x
+        y = solution.y
+        w = solution.w
 
         cost = [sum(r.C₁'*x + r.C₂'*(x + y[:, s] - w[:, s])) for s = 1:S]
         metric_1 = mapreduce(permutedims, vcat, [r.M₁[:, :, s]' * x for s = 1:S])'
@@ -375,7 +346,7 @@ function fcn_evaluate_solution(model::Vector{Model}, realisations::Vector{Realis
     end
 
     for j=1:J
-        (cost, metric) = fcn_evaluate_solution_model(model[j], realisations[j])
+        (cost, metric) = fcn_evaluate_solution_model(solutions[j], realisations[j])
         cost_mat[:, j] = cost
         metric_mat[:, :, j] = metric'
     end
@@ -405,13 +376,13 @@ function fcn_tidy_two_stage_solution_sum(solution::Solution, prop_id)
     return DataFrame(out, colnames)
 end
 
-function fcn_tidy_two_stage_solution_sum(models::Vector{Model}, prop_id)
-    N = length(value.(models[1][:x]));
-    x = mapreduce(permutedims, vcat, [value.(model[:x]) for model in models])
-    y = mapreduce(permutedims, vcat, [haskey(model, :y) ? sum(value.(model[:y]), dims=2) : zeros(N, 1) for model in models])
-    w = mapreduce(permutedims, vcat, [haskey(model, :w) ? sum(value.(model[:w]), dims=2) : zeros(N, 1) for model in models])
+function fcn_tidy_two_stage_solution_sum(solutions::Vector{Solution}, prop_id)
+    N = length(value.(solutions[1].x));
+    x = mapreduce(permutedims, vcat, [soln.x for soln in solutions])
+    y = mapreduce(permutedims, vcat, [sum(soln.y, dims = 2) for soln in solutions])
+    w = mapreduce(permutedims, vcat, [sum(soln.w, dims = 2) for soln in solutions])
 
     out = hcat(prop_id, x', y', w')
-    colnames = vcat(["NewPropID"; ["x$(i)" for i in range(1,length(models))]; ["sum_y$(i)" for i in range(1,length(models))]; ["sum_w$(i)" for i in range(1,length(models))]])
+    colnames = vcat(["NewPropID"; ["x$(i)" for i in range(1,length(solutions))]; ["sum_y$(i)" for i in range(1,length(solutions))]; ["sum_w$(i)" for i in range(1,length(solutions))]])
     return DataFrame(out, colnames)
 end

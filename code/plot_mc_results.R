@@ -17,7 +17,7 @@ sp <- 1 #1:10
 tt <- 6 # [0,1,2,3,4,5,6,7]
 kt <- 0.25 # [0.1, 0.15, 0.2, 0.25, 0.3]
 ns <- 12 # 1:12
-rr <- 1
+rr <- 30
 sdr <- 0.02
 dr <- 0.1
 k <- 7000
@@ -119,7 +119,7 @@ aus_plot <- ggplot() +
 
 spatial_pred <- read_csv('data/spatial_predictions_10yr.csv')
 
-scen_list <- c('Inflexible - Ignore Risk', 'Inflexible - Robust', 'Flexible', 'Flexible & Learning')
+scen_list <- c('Inflexible - Ignore Risk', 'Partially Flexible', 'Flexible', 'Flexible & Learning')
 plot_list <- list()
 
 fcn_decision_set <- function(a,b,area) {
@@ -459,7 +459,7 @@ i = 4
     scale_color_manual(values = scen_color_def) +
     scale_fill_manual(values = scen_color_def) +
     facet_grid(~model, labeller = label_wrap_gen()) +
-    coord_cartesian(xlim = c(2020,2070), ylim = c(0, 18000)) +
+    coord_cartesian(xlim = c(2020,2070), ylim = c(0, 24000)) +
     guides(color = 'none', fill = 'none') +
     ggpubr::theme_pubr() +
     scale_alpha_manual(name = NULL,
@@ -530,7 +530,7 @@ i = 4
     #geom_text(aes(label = model, y = ub + 10e6, x = name_num, color = model)) +
     ggpubr::theme_pubr() +
     scale_y_continuous("Cost", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6)) +
-    coord_cartesian(ylim = c(0, 2.5e8), xlim = c(0,6.5), expand = F) +
+    coord_cartesian(ylim = c(0, 3e8), xlim = c(0,6.5), expand = F) +
     guides(color = 'none')
   cost_plot_vertical <- cost_plot +
     theme(axis.title.x = element_blank(),
@@ -544,7 +544,7 @@ i = 4
     bind_rows(.id = 'model')
   
   cost_plot_horizontal <- cost_plot + 
-    coord_flip(ylim = c(0, 2.4e8), xlim = c(6.5,0), expand = F) + 
+    coord_flip(ylim = c(0, 3e8), xlim = c(6.5,0), expand = F) + 
     scale_y_continuous("Cost", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), 
                        breaks = (0.5:5.5)*0.5e8) +
     scale_x_reverse() +

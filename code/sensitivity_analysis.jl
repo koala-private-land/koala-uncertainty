@@ -15,7 +15,6 @@ using Revise
 using StatsBase
 using Gurobi
 using JuMP
-using StatsPlots
 using Distributions
 using JLD2
 using Random
@@ -53,8 +52,6 @@ K_pa_change_vec = [0.0, 0.005, 0.01, 0.015, 0.02, 0.025]
 ssb = 1.0e7 # Second-stage budget (in NPV terms)
 ssb_vec = [0.0, 0.5e7, 1.0e7, 1.5e7, 2.0e7, 2.5e7, 3.0e7, 3.5e7, 4.0e7]
 
-
-
 dir = "results/model_runs"
 
 println("Starting sensitivity analysis...")
@@ -64,6 +61,9 @@ fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, def
 
 # Inflexible
 fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, false, ssb, K_pa_change)
+
+# Run across all ns, number of scenarios in resolved uncertainty
+map((ns_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns_i, sdr, deforestation_risk, k, false, ssb, K_pa_change), ns_vec)
 
 # Run across all discount rate choices
 map((sdr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, 1, sdr_i, deforestation_risk, k, false, ssb, K_pa_change), sdr_vec)
@@ -80,9 +80,6 @@ map((ssb) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt,
 # Run across all values of k (conservation goal in area)
 map((k) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, 1, sdr, deforestation_risk, k, false, ssb, K_pa_change), k_vec)
 map((k) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, false, ssb, K_pa_change), k_vec)
-
-# Run across all ns, number of scenarios in resolved uncertainty
-map((ns_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns_i, sdr, deforestation_risk, k, false, ssb, K_pa_change), ns_vec)
 
 # Run across all deforestation risk rates
 map((dr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, 1, sdr, dr_i, k, false, ssb, K_pa_change), deforestation_risk_vec)

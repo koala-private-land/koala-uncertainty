@@ -1,6 +1,7 @@
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Gurobi = "2e9cd046-0924-5485-92f1-d5272153d98b"
 Gurobi_jll = "c018c7e6-a5b0-4aea-8f80-9c1ef9991411"
@@ -9,5 +10,4 @@ JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-StatsPlots = "f3b207a7-027a-5e70-b257-86293d7955fd"
 ThreadsX = "ac1d9e8a-700a-412c-b207-f0111f4b6c0d"
