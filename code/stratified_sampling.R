@@ -1,10 +1,9 @@
-library(DescTools)
-library(tidyverse)
+library(dplyr)
 
 # Willingness-to-accept calculations
 source('code/load_paths.R')
 
-cost_pred <- read_csv("data/spatial_predictions_10yr.csv")
+cost_pred <- read_csv("data/spatial_predictions_inf.csv")
 
 split_by_pct <- function(x, n_pct=5) {
   # Splits a random variable into a groups by percentile
@@ -18,7 +17,7 @@ rand_strat_sample <- function(cost_pred) {
   strata <- cost_pred %>%
     mutate(lval_perha_group = split_by_pct(LVAL/AREA, 20)) %>%
     group_by(KMR, lval_perha_group) %>%
-    sample_frac(.1) %>%
+    sample_frac(.2) %>%
     ungroup() %>%
     arrange(NewPropID)
   return(strata$NewPropID)

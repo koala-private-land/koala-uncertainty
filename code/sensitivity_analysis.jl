@@ -22,8 +22,8 @@ using Random
 Random.seed!(54815861)
 
 # Constants
-R = 30; # Total number of uncertainty realisations
-rr = 30; # Sampled realisations
+R = 1; # Total number of uncertainty realisations
+rr = 1; # Sampled realisations
 S = 12;
 
 parallel_mode = false
@@ -55,15 +55,6 @@ ssb_vec = [0.0, 0.5e7, 1.0e7, 1.5e7, 2.0e7, 2.5e7, 3.0e7, 3.5e7, 4.0e7]
 dir = "results/model_runs"
 
 println("Starting sensitivity analysis...")
-
-# Ignore uncertainty
-fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, true, ssb, K_pa_change)
-
-# Inflexible
-fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, false, ssb, K_pa_change)
-
-# Run across all ns, number of scenarios in resolved uncertainty
-map((ns_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns_i, sdr, deforestation_risk, k, false, ssb, K_pa_change), ns_vec)
 
 # Run across all discount rate choices
 map((sdr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, 1, sdr_i, deforestation_risk, k, false, ssb, K_pa_change), sdr_vec)

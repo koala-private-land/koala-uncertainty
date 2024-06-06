@@ -119,7 +119,7 @@ aus_plot <- ggplot() +
 
 spatial_pred <- read_csv('data/spatial_predictions_10yr.csv')
 
-scen_list <- c('Inflexible - Ignore Risk', 'Partially Flexible', 'Flexible', 'Flexible & Learning')
+scen_list <- c('Inflexible - Ignore Risk', 'Restricted Flexibility', 'Flexible', 'Flexible & Learning')
 plot_list <- list()
 
 fcn_decision_set <- function(a,b,area) {
@@ -189,7 +189,7 @@ i = 4
     geom_ribbon(aes(ymin = lb, ymax = ub, fill = model), alpha = 0.25) +
     geom_line(aes(y = median, color = model), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
-    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
+    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[2:4]), aes(y = median, color = model), size = 2)+
     scale_y_continuous("Koala habitat (ha)") +
     scale_x_continuous("Year") +
     scale_color_colorblind7() +
@@ -450,8 +450,8 @@ i = 4
     geom_line(aes(y = median, color = model, alpha = "Median"), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
     geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
-    annotate("text", label = "Time-\nperiod\n1", x = mean(c(2020,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50', size = 3) +
-    annotate("text", label = "Time-\nperiod\n2", x = mean(c(2070,year_vec[tt]-1)), y = 2000+16500, hjust = 0.5, vjust = 1, color = 'gray50', size = 3) +
+    annotate("text", label = "Time-\nperiod\n1", x = mean(c(2020,year_vec[tt]-1)), y = 24000, hjust = 0.5, vjust = 1, color = 'gray50', size = 3) +
+    annotate("text", label = "Time-\nperiod\n2", x = mean(c(2070,year_vec[tt]-1)), y = 24000, hjust = 0.5, vjust = 1, color = 'gray50', size = 3) +
     #annotate("segment", x = 2020, xend = year_vec[tt]-1, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
     #annotate("segment", x = 2070, xend = year_vec[tt]-1, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
     scale_y_continuous("Policy target", labels = function(x) paste0(x*100 / 7000, '%'), breaks = ((0:8)*50) * 70) +
@@ -878,8 +878,8 @@ plot_line_diff_learning <- function(summary_diff_pct, dodge_width = 0.0005, labe
 }
 
 # Extract matrices of the differences between robust and flexible solutions -----
-full_learning <- c(7000,1,6,0.25,1,30,0.02,0.1)
-no_learning <- c(7000,1,6,0.25,12,30,0.02,0.1)
+full_learning <- c(7000,1,6,0.25,1,30,0.02,0.1,0,1e7)
+no_learning <- c(7000,1,6,0.25,12,30,0.02,0.1,0,1e7)
 
 cost_first_stage <- read_csv(paste0(results_dir, 'cost1_', get_run_string(no_learning), '.csv'))
 

@@ -11,7 +11,7 @@ using Distributed
 
 println("Loading data files...")
 
-cost_df = CSV.read("data/spatial_predictions_10yr.csv", DataFrame);
+cost_df = CSV.read("data/spatial_predictions_inf.csv", DataFrame);
 kitl_index_full = CSV.read("data/kitl_prop_climate.csv", DataFrame);
 stratified_samples = CSV.read("data/stratified_sample.csv", DataFrame);
 climateProjList = ["CCCMA_R1", "CCCMA_R2", "CCCMA_R3", "CSIRO_R1", "CSIRO_R2", "CSIRO_R3", "ECHAM_R1", "ECHAM_R2", "ECHAM_R3", "MIROC_R1", "MIROC_R2", "MIROC_R3"];
@@ -181,7 +181,7 @@ end
 
 function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame, out_dir::AbstractString, sp::Integer, tt::Integer, 
     kt::AbstractFloat, ns::Integer, discount_rate::Real=0.02, deforestation_risk::Real = 0.1, 
-    K::Real = 7000, baseline_conditions=false, second_stage_budget::Float64 = 1.0e7, K_pa_change::Float64=0.0, recourses = (true,true,true,false,false))
+    K::Real = 7000, baseline_conditions=false, second_stage_budget::Float64 = 1.0e7, K_pa_change::Float64=0.0, recourses = (false,true,true,false,false))
     Random.seed!(54815861) # Ensure all realisation samples are the same
     run_string = "run_k-$(K)_sp-$(sp)_tt-$(tt)_kt-$(kt)_ns-$(ns)_r-$(rr)_sdr-$(ismissing(discount_rate) ? "ddr" : discount_rate)_dr-$(deforestation_risk)_ssb-$(second_stage_budget)_kpac-$(K_pa_change)"
     if (baseline_conditions && isfile("$(out_dir)/decision_baseline_$(run_string).csv"))
@@ -212,7 +212,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     metric_reshape = m -> DataFrame(reshape(permutedims(m, (1, 3, 2)), (size(m, 1) * size(m, 3), size(m, 2))), :auto)
     (no_recourse, add_recourse, partial_recourse, terminate_recourse, full_recourse) = recourses
 
-    if (baseline_conditions && no_recourse)
+    if (baseline_conditions)
         models_nr_vec = pmap((realisation) -> fcn_two_stage_opt_deforestation(realisation; K=K, ns=ns, terminate_recourse=false, add_recourse=false, baseline_conditions=true), realisations)
         decision_nr = fcn_tidy_two_stage_solution_sum(models_nr_vec, out_propid)
         (cost_nr, metric_nr) = fcn_evaluate_solution(models_nr_vec, realisations)
