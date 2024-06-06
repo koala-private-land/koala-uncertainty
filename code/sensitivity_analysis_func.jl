@@ -203,6 +203,9 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     realisation_cost_1_df = DataFrame(realisation_cost_1, :auto)
     CSV.write("$(out_dir)/cost1_$(run_string).csv", realisation_cost_1_df)
 
+    # NPV-equivalent of second stage budget
+    second_stage_budget_npv = second_stage_budget * (1/(1+discount_rate)^(10*(tt-1)))
+
     # Write full costs of conservation covenant to table
     realisation_cost_full = hcat([realisations[r].C₁ + mean(realisations[r].C₂, dims = 2) for r in 1:R]...)
     realisation_cost_full_df = DataFrame(realisation_cost_full, :auto)
@@ -238,7 +241,7 @@ function fcn_run_optim(kitl_index_full::DataFrame, stratified_samples::DataFrame
     end
 
     if (partial_recourse)
-        models_pr_vec = pmap((realisation) -> fcn_two_stage_opt_deforestation(realisation; K=K, ns=ns, budget_constraint = (missing, second_stage_budget), terminate_recourse=false, add_recourse=true, K_pa_change=K_pa_change), realisations)
+        models_pr_vec = pmap((realisation) -> fcn_two_stage_opt_deforestation(realisation; K=K, ns=ns, budget_constraint = (missing, second_stage_budget_npv), terminate_recourse=false, add_recourse=true, K_pa_change=K_pa_change), realisations)
         (cost_pr, metric_pr) = fcn_evaluate_solution(models_pr_vec, realisations)
         decision_pr = fcn_tidy_two_stage_solution_sum(models_pr_vec, out_propid)
         CSV.write("$(out_dir)/cost_pr_$(run_string).csv", DataFrame(cost_pr, :auto))

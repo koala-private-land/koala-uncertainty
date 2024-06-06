@@ -49,11 +49,8 @@ ssb = 1.0e7 # Second-stage budget (in NPV terms)
 # Ignore uncertainty
 fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, true, ssb, K_pa_change)
 
-# Inflexible (nr)/ Restricted Flexibility (pr)
+# Inflexible (nr)/ Restricted Flexibility (pr)/ Flexible (ar)
 fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, false, ssb, K_pa_change)
-
-# Flexible
-fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, 12, sdr, deforestation_risk, k, false, ssb, K_pa_change)
 
 # Flexible & Learning
 fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, 1, sdr, deforestation_risk, k, false, ssb, K_pa_change)
