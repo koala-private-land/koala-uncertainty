@@ -1,4 +1,5 @@
 library(dplyr)
+library(readr)
 
 # Willingness-to-accept calculations
 source('code/load_paths.R')
@@ -17,7 +18,7 @@ rand_strat_sample <- function(cost_pred) {
   strata <- cost_pred %>%
     mutate(lval_perha_group = split_by_pct(LVAL/AREA, 20)) %>%
     group_by(KMR, lval_perha_group) %>%
-    sample_frac(.2) %>%
+    sample_frac(.25) %>%
     ungroup() %>%
     arrange(NewPropID)
   return(strata$NewPropID)

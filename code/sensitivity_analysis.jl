@@ -48,7 +48,7 @@ deforestation_risk_vec = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55,
 k = 7000;
 k_vec = [2500, 4000, 5500, 7000, 8500, 10000, 11500]
 K_pa_change = 0.0 # Change of biodiversity target per-annum (n.b. 0.024 equivalent to doubling target over 30 years)
-K_pa_change_vec = [0.0, 0.005, 0.01, 0.015, 0.02, 0.025]
+K_pa_change_vec = reverse([0.0, 0.005, 0.01, 0.015, 0.02, 0.025])
 ssb = 1.0e7 # Second-stage budget (in NPV terms)
 ssb_vec = [0.0, 0.5e7, 1.0e7, 1.5e7, 2.0e7, 2.5e7, 3.0e7, 3.5e7, 4.0e7]
 
@@ -56,13 +56,14 @@ dir = "results/model_runs"
 
 println("Starting sensitivity analysis...")
 
-# Run across all discount rate choices
-map((sdr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, 1, sdr_i, deforestation_risk, k, false, ssb, K_pa_change), sdr_vec)
-map((sdr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr_i, deforestation_risk, k, false, ssb, K_pa_change), sdr_vec)
-
 # Run across all values of K_pa_change, change in target per annum
 map((K_pa_change) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, false, ssb, K_pa_change), K_pa_change_vec)
 map((K_pa_change) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, 1, sdr, deforestation_risk, k, false, ssb, K_pa_change), K_pa_change_vec)
+
+
+# Run across all discount rate choices
+map((sdr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, 1, sdr_i, deforestation_risk, k, false, ssb, K_pa_change), sdr_vec)
+map((sdr_i) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr_i, deforestation_risk, k, false, ssb, K_pa_change), sdr_vec)
 
 # Run across all values of second-stage budget constraints
 map((ssb) -> fcn_run_optim(kitl_index_full, stratified_samples, dir, sp, tt, kt, ns, sdr, deforestation_risk, k, false, ssb, K_pa_change), ssb_vec)

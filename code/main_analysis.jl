@@ -23,8 +23,8 @@ using Random
 Random.seed!(54815861)
 
 # Constants
-R = 30; # Total number of uncertainty realisations
-rr = 30; # Sampled realisations
+R = 50; # Total number of uncertainty realisations
+rr = 50; # Sampled realisations
 S = 12;
 
 

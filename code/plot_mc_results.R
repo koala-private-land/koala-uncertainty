@@ -17,7 +17,7 @@ sp <- 1 #1:10
 tt <- 6 # [0,1,2,3,4,5,6,7]
 kt <- 0.25 # [0.1, 0.15, 0.2, 0.25, 0.3]
 ns <- 12 # 1:12
-rr <- 30
+rr <- 50
 sdr <- 0.02
 dr <- 0.1
 k <- 7000
@@ -37,7 +37,7 @@ scale_color_colorblind7 = function(...){
 }
 
 default_params = c(k, sp, tt, kt, ns, rr, sdr, dr, ssb, kpac)
-base_string <- "run_k-%s_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%s_ssb-%.1e_kpac-%.1f"
+base_string <- "run_k-%s_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%.1f_ssb-%.1e_kpac-%.1f"
 
 get_run_string <- function(params = default_params) {
   run_string <-  do.call(sprintf, c(fmt = base_string, as.list(params))) %>%
@@ -61,7 +61,7 @@ flexibility_differences <- function(recourse = c(T,T,T,F,F), loop_vec = 1:10, pa
     }
     if (recourse[2]){
       pr <- read_csv(paste0(results_dir, "cost_pr_", run_string, ".csv"), col_types = cols()) # recourse solution
-      diff$ar = (ar - pr) / pr
+      #diff$ar = (ar - pr) / pr
     }
     if (recourse[3]){
       ar <- read_csv(paste0(results_dir, "cost_ar_", run_string, ".csv"), col_types = cols()) # recourse solution
@@ -449,7 +449,7 @@ i = 4
     #          aes(x = year, y = ub, color = model), linetype = 3, linewidth = 0.5)+
     geom_line(aes(y = median, color = model, alpha = "Median"), linewidth = 1) +
     geom_point(data = filter(baseline_robust_df, t %in% c(3)), aes(y = median, color = model), size = 2)+
-    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[3:4]), aes(y = median, color = model), size = 2)+
+    geom_point(data = filter(baseline_robust_df, t %in% tt & model %in% scen_list[2:4]), aes(y = median, color = model), size = 2)+
     annotate("text", label = "Time-\nperiod\n1", x = mean(c(2020,year_vec[tt]-1)), y = 24000, hjust = 0.5, vjust = 1, color = 'gray50', size = 3) +
     annotate("text", label = "Time-\nperiod\n2", x = mean(c(2070,year_vec[tt]-1)), y = 24000, hjust = 0.5, vjust = 1, color = 'gray50', size = 3) +
     #annotate("segment", x = 2020, xend = year_vec[tt]-1, y = 200+16500, yend = 200+16500, arrow = arrow(ends = "both",length = unit(.2,"cm")), color = 'gray50') +
@@ -524,7 +524,6 @@ i = 4
   }
   
   cost_plot <- cost_plot +
-    geom_hline(yintercept = 0) +
     geom_point(aes(y = median, color = model), size = 3) +
     scale_color_manual(values=scen_color_def, labels = function(x) str_wrap(x, width = 24))+
     #geom_text(aes(label = model, y = ub + 10e6, x = name_num, color = model)) +
@@ -544,7 +543,7 @@ i = 4
     bind_rows(.id = 'model')
   
   cost_plot_horizontal <- cost_plot + 
-    coord_flip(ylim = c(0, 3e8), xlim = c(6.5,0), expand = F) + 
+    coord_flip(ylim = c(-1e7, 3e8), xlim = c(6.5,0), expand = F) + 
     scale_y_continuous("Cost", labels = scales::unit_format(prefix = "A$", suffix = "M",scale = 1e-6), 
                        breaks = (0.5:5.5)*0.5e8) +
     scale_x_reverse() +
@@ -878,16 +877,15 @@ plot_line_diff_learning <- function(summary_diff_pct, dodge_width = 0.0005, labe
 }
 
 # Extract matrices of the differences between robust and flexible solutions -----
-full_learning <- c(7000,1,6,0.25,1,30,0.02,0.1,0,1e7)
-no_learning <- c(7000,1,6,0.25,12,30,0.02,0.1,0,1e7)
+full_learning <- c(7000,1,6,0.25,1,1,0.02,0.1,1e7,0)
+no_learning <- c(7000,1,6,0.25,12,1,0.02,0.1,1e7,0)
 
 cost_first_stage <- read_csv(paste0(results_dir, 'cost1_', get_run_string(no_learning), '.csv'))
 
-dr_vec <- seq(0.0,1,0.05) %>%
-  sapply(function(x) format(round(x, 2), nsmall = 1))
+dr_vec <- seq(0.0,1,0.05)
 dr_flex_diff <- list(
-  no = flexibility_differences(params = no_learning, loop_vec = dr_vec, dep_var = 8),
-  full = flexibility_differences(params = full_learning, loop_vec = dr_vec, dep_var = 8)
+  no = flexibility_differences(params = no_learning, loop_vec = dr_vec, dep_var = 8, recourse = c(F, T, T, F, F)),
+  full = flexibility_differences(params = full_learning, loop_vec = dr_vec, dep_var = 8, recourse = c(F, T, T, F, F))
   ) %>%
   bind_rows(.id = "learning")
 
@@ -908,6 +906,7 @@ dr_flex_plot <- dr_flex_diff %>%
   theme(legend.position = "bottom")
 
 ## Plot change in protected area size in stage 1 relative to stage 2
+rr=1
 dr_share_full_learning <- lapply(dr_vec, function(i) {
   l <- full_learning
   l[8] <- i
