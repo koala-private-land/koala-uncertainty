@@ -37,7 +37,7 @@ scale_color_colorblind7 = function(...){
 }
 
 default_params = c(k, sp, tt, kt, ns, rr, sdr, dr, ssb, kpac)
-base_string <- "run_k-%s_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%s_dr-%.1f_ssb-%.1e_kpac-%.1f"
+base_string <- "run_k-%s_sp-%s_tt-%s_kt-%s_ns-%s_r-%s_sdr-%.1f_dr-%.1f_ssb-%.1e_kpac-%.1f"
 
 get_run_string <- function(params = default_params) {
   run_string <-  do.call(sprintf, c(fmt = base_string, as.list(params))) %>%
@@ -1034,8 +1034,8 @@ sp_flex_diff <- list(
   bind_rows(.id = 'learning')
 
 tt_flex_diff <- list(
-  full = flexibility_differences(params = full_learning, loop_vec = c(3,4,5,6), dep_var = 3, realisation = 1:10),
-  no = flexibility_differences(params = no_learning, loop_vec = c(3,4,5,6), dep_var = 3, realisation = 1:10)
+  full = flexibility_differences(params = full_learning, loop_vec = c(3,4,5,6), dep_var = 3),
+  no = flexibility_differences(params = no_learning, loop_vec = c(3,4,5,6), dep_var = 3)
 ) %>%
   bind_rows(.id = 'learning')
 
@@ -1052,10 +1052,20 @@ sdr_flex_diff <- list(
 ) %>%
   bind_rows(.id = 'learning')
 
+sdr_declining_flex_diff <- list(
+  no = flexibility_differences(params = no_learning, loop_vec = c(-99.0), dep_var = 7),
+  full = flexibility_differences(params = full_learning, loop_vec = c(-99.0), dep_var = 7)
+) %>%
+  bind_rows(.id = 'learning')
+
 # Policy targets
 k_flex_diff <- list(
-  full = flexibility_differences(params = full_learning, loop_vec = 1000+1500*(0:7), dep_var = 1),
-  no = flexibility_differences(params = no_learning, loop_vec = 1000+1500*(0:7), dep_var = 1)
+  full = flexibility_differences(params = full_learning, 
+                                 loop_vec = c(2500, 4000, 5500, 7000, 8500, 10000, 11500), 
+                                 dep_var = 1),
+  no = flexibility_differences(params = no_learning, 
+                               loop_vec = c(2500, 4000, 5500, 7000, 8500, 10000, 11500), 
+                               dep_var = 1)
 ) %>%
   bind_rows(.id = 'learning')
 
