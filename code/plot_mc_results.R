@@ -46,7 +46,7 @@ get_run_string <- function(params = default_params) {
   return(run_string)
 }
 
-flexibility_differences <- function(recourse = c(T,T,T,F,F), loop_vec = 1:10, params = default_params, 
+flexibility_differences <- function(recourse = c(F,T,T,F,F), loop_vec = 1:10, params = default_params, 
                                     dep_var = 1, interval = c(0.05, 0.95), realisation = NULL, base_dir = results_dir) {
   # dep_var starts at 0
   cost_diff_pct <- lapply(loop_vec, function(x) {
@@ -877,12 +877,12 @@ plot_line_diff_learning <- function(summary_diff_pct, dodge_width = 0.0005, labe
 }
 
 # Extract matrices of the differences between robust and flexible solutions -----
-full_learning <- c(7000,1,6,0.25,1,1,0.02,0.1,1e7,0)
-no_learning <- c(7000,1,6,0.25,12,1,0.02,0.1,1e7,0)
+full_learning <- c(7000,1,6,0.25,1,10,0.02,0.1,1e7,0)
+no_learning <- c(7000,1,6,0.25,12,10,0.02,0.1,1e7,0)
 
 cost_first_stage <- read_csv(paste0(results_dir, 'cost1_', get_run_string(no_learning), '.csv'))
 
-dr_vec <- seq(0.0,1,0.05)
+dr_vec <- seq(0.0,1.0,0.05)
 dr_flex_diff <- list(
   no = flexibility_differences(params = no_learning, loop_vec = dr_vec, dep_var = 8, recourse = c(F, T, T, F, F)),
   full = flexibility_differences(params = full_learning, loop_vec = dr_vec, dep_var = 8, recourse = c(F, T, T, F, F))
@@ -906,7 +906,7 @@ dr_flex_plot <- dr_flex_diff %>%
   theme(legend.position = "bottom")
 
 ## Plot change in protected area size in stage 1 relative to stage 2
-rr=1
+rr=10
 dr_share_full_learning <- lapply(dr_vec, function(i) {
   l <- full_learning
   l[8] <- i
@@ -1017,7 +1017,6 @@ dr_share_plot <- dr_diff%>%
 
 ggsave("plots/plot3.png", dr_plots, width = 1500, height = 2000, units = 'px')
 
-
 dr_flex_diff %>%
   ggplot(aes(color = learning, fill = learning, x = as.numeric(name))) +
   geom_point(aes(y = -median), position=position_dodge(width=0.02)) +
@@ -1026,6 +1025,8 @@ dr_flex_diff %>%
   ggsci::scale_color_d3() +
   ggpubr::theme_pubr()
 
+full_learning[6] <- 1
+no_learning[6] <- 1
 sp_flex_diff <- list(
   full = flexibility_differences(params = full_learning, loop_vec = 1:10, dep_var = 2),
   no = flexibility_differences(params = no_learning, loop_vec = 1:10, dep_var = 2)
