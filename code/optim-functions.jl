@@ -275,7 +275,7 @@ function fcn_two_stage_opt_deforestation(realisation::Realisation; K::Real=7000,
         end
     else
         # Objective must be reached across all climate realisations before climate is known
-        @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K * (1+K_pa_change)^((t-1)*10-1))
+        @constraint(model, [t in axes(M₁, 2), s in 1:S], M₁[:, t, s]' * x .>= K * (1+K_pa_change)^((t-1)*10))
         
         # After uncertainty is revealed, the objective only needs to be met at that scenario
         @constraint(model, [t in axes(M₂, 2), s in 1:S], M₂[:, t, s_vec[s]]' * (x .+ (add_recourse ? y[:, s] : 0) .- (terminate_recourse ? w[:, s] : 0)) .>= K * (1+K_pa_change)^((t+ size(M₁, 2) - 1)*10-1))
