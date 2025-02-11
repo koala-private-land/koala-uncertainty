@@ -74,17 +74,17 @@ flexibility_differences <- function(recourse = c(F,T,T,F,F), loop_vec = 1:10, pa
     }
     if (recourse[3]){
       ar <- read_csv(paste0(results_dir, "cost_ar_", run_string, ".csv"), col_types = cols()) # recourse solution
-      diff$ar = (ar - pr) / pr
+      diff$ar = (ar - pr) / nr
       diff$ar_abs = ar
     }
     if (recourse[4]){
       tr <- read_csv(paste0(results_dir, "cost_tr_", run_string, ".csv"), col_types = cols()) # recourse solution
-      diff$tr = (tr - pr)/ pr
+      diff$tr = (tr - pr)/ nr
       diff$tr_abs = tr
       }
     if (recourse[5]) {
       fr <- read_csv(paste0(results_dir, "cost_fr_", run_string, ".csv"), col_types = cols()) # recourse solution
-      diff$fr = (fr - pr)/pr
+      diff$fr = (fr - pr)/nr
       diff$fr_abs = fr
     }
     diff
@@ -133,7 +133,7 @@ spatial_pred <- read_csv('data/spatial_predictions_10yr.csv')
 
 scen_list <- list(
   baseline = 'Inflexible - Ignore Risk', 
-  robust = 'Restricted Flexibility', 
+  robust = 'Inflexible - Robust', 
   flexible = 'Flexible', 
   flexible_learning = 'Flexible & Learning'
 )
@@ -163,7 +163,7 @@ flexible_string <- get_run_string(c(k, sp, tt, kt, ns, rr, sdr, dr, ssb, kpac))
 flexible_learning_string <- get_run_string(c(k, sp, tt, kt, 1, rr, sdr, dr, ssb, kpac))
 
 baseline_metric <- read_csv(paste0(results_dir, "metric_baseline_", baseline_string, ".csv"), col_types = cols())
-robust_metric <- read_csv(paste0(results_dir, "metric_pr_", robust_string, ".csv"), col_types = cols())
+robust_metric <- read_csv(paste0(results_dir, "metric_nr_", robust_string, ".csv"), col_types = cols())
 flexible_metric <- read_csv(paste0(results_dir, 'metric_ar_', flexible_string, ".csv"), col_types = cols())
 flexible_learning_metric <- read_csv(paste0(results_dir, 'metric_ar_', flexible_learning_string, ".csv"), col_types = cols())
 
