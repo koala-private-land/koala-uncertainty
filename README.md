@@ -25,6 +25,7 @@ One will need the data contained in the `data` directory in order to replicate t
 * `gurobi_init.jl`: Julia script used to initialise the path of the Gurobi optimiser in the system.
 * `optim_functions.jl`: functions to set up the data as optimisation problems for Gurobi. Contains `fcn_two_stage_opt_deforestation` which is the main driver function for setting up data and solving it as optimisation problems.
 * `discounting.jl`: Julia code containing the function to do discounting using UK Green Book schedules of declining discount rates, as part of the sensitivity analyses.
+* `prop_zonal_stat.py`: the Python script used to do Zonal statistics for the REMP model (KITL project) outputs (in GeoTIFF) to the property level, using ArcGIS Pro with Spatial Analyst extension (as exactextractr takes too long for the number of properties), generating the inputs needed in `kitl_read_data.R`
 * `kitl_read_data.R`: the script used to generate the data file `kitl_prop_climate.csv`.
 * `write_shapes.R`: write shapefile information to the plots directory, for use when plotting
 
@@ -35,6 +36,7 @@ One will need the data contained in the `data` directory in order to replicate t
 * Microsoft VSCode (recommended)
 * data directory (available upon request)
 * Gurobi optimiser
+* ArcGIS Pro with Spatial Analyst extension (for doing zonal statistics of REMP model outputs at the property level only)
 
 ### Instructions
 1. Download Julia and install it using the Windows installer ([link](https://julialang-s3.julialang.org/bin/winnt/x64/1.10/julia-1.10.3-win64.exe))
